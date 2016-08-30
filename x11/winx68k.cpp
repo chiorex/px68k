@@ -17,7 +17,7 @@ extern "C" {
 #include "winx68k.h"
 #include "windraw.h"
 #include "winui.h"
-#include "../x68k/m68000.h" // xxx д│дьд╧ддд║дьдддщд╩дпд╩дыд╧д║
+#include "../x68k/m68000.h" // xxx ┬д┬│┬д├м┬д├П┬д┬д┬д┬║┬д├м┬д┬д┬д├й┬д├К┬д┬п┬д├К┬д├л┬д├П┬д┬║
 #include "../m68000/m68000.h"
 #include "../x68k/memory.h"
 #include "mfp.h"
@@ -73,6 +73,10 @@ extern	BYTE	BG_CHRSIZE;
 extern SDL_TouchID touchId;
 #endif
 
+int m68000_ICountBk;
+int ICount;
+int * C68KICount;
+
 const	BYTE	PrgName[] = "Keropi";
 const	BYTE	PrgTitle[] = APPNAME;
 
@@ -113,21 +117,21 @@ void
 WinX68k_SCSICheck(void)
 {
 	static const BYTE SCSIIMG[] = {
-		0x00, 0xfc, 0x00, 0x14,			// $fc0000 SCSI╡п╞░═╤д╬еиеєе╚еъеве╔еье╣
-		0x00, 0xfc, 0x00, 0x16,			// $fc0004 IOCSе┘епе┐└▀─ъд╬еиеєе╚еъеве╔еье╣(╔мд║"Human"д╬8е╨еде╚┴░)
+		0x00, 0xfc, 0x00, 0x14,			// $fc0000 SCSI┬╡┬п├Ж┬░├Н├С┬д├О┬е┬и┬е├│┬е├И┬е├к┬е┬в┬е├Й┬е├м┬е┬╣
+		0x00, 0xfc, 0x00, 0x16,			// $fc0004 IOCS┬е├Щ┬е┬п┬е┬┐├А├Я├Д├к┬д├О┬е┬и┬е├│┬е├И┬е├к┬е┬в┬е├Й┬е├м┬е┬╣(├Й┬м┬д┬║"Human"┬д├О8┬е├Р┬е┬д┬е├И├Б┬░)
 		0x00, 0x00, 0x00, 0x00,			// $fc0008 ?
-		0x48, 0x75, 0x6d, 0x61,			// $fc000c вн
-		0x6e, 0x36, 0x38, 0x6b,			// $fc0010 ID "Human68k"	(╔мд║╡п╞░еиеєе╚еъе▌едеєе╚д╬─╛┴░)
-		0x4e, 0x75,				// $fc0014 "rts"		(╡п╞░еиеєе╚еъе▌едеєе╚)
-		0x23, 0xfc, 0x00, 0xfc, 0x00, 0x2a,	// $fc0016 вн		(IOCSе┘епе┐└▀─ъеиеєе╚еъе▌едеєе╚)
+		0x48, 0x75, 0x6d, 0x61,			// $fc000c ┬в┬н
+		0x6e, 0x36, 0x38, 0x6b,			// $fc0010 ID "Human68k"	(├Й┬м┬д┬║┬╡┬п├Ж┬░┬е┬и┬е├│┬е├И┬е├к┬е├Э┬е┬д┬е├│┬е├И┬д├О├Д┬╛├Б┬░)
+		0x4e, 0x75,				// $fc0014 "rts"		(┬╡┬п├Ж┬░┬е┬и┬е├│┬е├И┬е├к┬е├Э┬е┬д┬е├│┬е├И)
+		0x23, 0xfc, 0x00, 0xfc, 0x00, 0x2a,	// $fc0016 ┬в┬н		(IOCS┬е├Щ┬е┬п┬е┬┐├А├Я├Д├к┬е┬и┬е├│┬е├И┬е├к┬е├Э┬е┬д┬е├│┬е├И)
 		0x00, 0x00, 0x07, 0xd4,			// $fc001c "move.l #$fc002a, $7d4.l"
 		0x74, 0xff,				// $fc0020 "moveq #-1, d2"
 		0x4e, 0x75,				// $fc0022 "rts"
 //		0x53, 0x43, 0x53, 0x49, 0x49, 0x4e,	// $fc0024 ID "SCSIIN"
-// ╞т┬вSCSIдЄONд╦д╣дыд╚бвSASIд╧╝л╞░┼кд╦OFFд╦д╩д├д┴дудждщд╖ддб─
-// дшд├д╞бвIDд╧е▐е├е┴д╖д╩дддшджд╦д╖д╞дкдпб─
+// ├Ж├в├В┬вSCSI┬д├▓ON┬д├Л┬д┬╣┬д├л┬д├И┬б┬вSASI┬д├П┬╝┬л├Ж┬░├Е┬к┬д├ЛOFF┬д├Л┬д├К┬д├Г┬д├Б┬д├г┬д┬ж┬д├й┬д┬╖┬д┬д┬б├Д
+// ┬д├и┬д├Г┬д├Ж┬б┬вID┬д├П┬е├Ю┬е├Г┬е├Б┬д┬╖┬д├К┬д┬д┬д├и┬д┬ж┬д├Л┬д┬╖┬д├Ж┬д┬к┬д┬п┬б├Д
 		0x44, 0x55, 0x4d, 0x4d, 0x59, 0x20,	// $fc0024 ID "DUMMY "
-		0x70, 0xff,				// $fc002a "moveq #-1, d0"	(SCSI IOCSе│б╝еыеиеєе╚еъе▌едеєе╚)
+		0x70, 0xff,				// $fc002a "moveq #-1, d0"	(SCSI IOCS┬е┬│┬б┬╝┬е├л┬е┬и┬е├│┬е├И┬е├к┬е├Э┬е┬д┬е├│┬е├И)
 		0x4e, 0x75,				// $fc002c "rts"
 	};
 
@@ -140,7 +144,7 @@ WinX68k_SCSICheck(void)
 
 	scsi = 0;
 	for (i = 0x30600; i < 0x30c00; i += 2) {
-#if 0 // 4д╬╟▄┐Їд╟д╧д╩дд╢Ў┐Їеве╔еье╣длдщд╬4е╨еде╚─╣евепе╗е╣д╧MIPSд╦д╧╠╡═¤
+#if 0 // 4┬д├О├З├Ь┬┐├┤┬д├З┬д├П┬д├К┬д┬д┬╢├╢┬┐├┤┬е┬в┬е├Й┬е├м┬е┬╣┬д┬л┬д├й┬д├О4┬е├Р┬е┬д┬е├И├Д┬╣┬е┬в┬е┬п┬е┬╗┬е┬╣┬д├ПMIPS┬д├Л┬д├П├М┬╡├Н├╜
 		p = (DWORD *)(&IPL[i]);
 		if (*p == 0x0000fc00)
 			scsi = 1;
@@ -155,14 +159,14 @@ WinX68k_SCSICheck(void)
 #endif
 	}
 
-	// SCSIете╟еыд╬д╚дн
+	// SCSI┬е├в┬е├З┬е├л┬д├О┬д├И┬д┬н
 	if (scsi) {
-		ZeroMemory(IPL, 0x2000);		// ╦▄┬╬д╧8kb
-		memset(&IPL[0x2000], 0xff, 0x1e000);	// ╗─дъд╧0xff
-		memcpy(IPL, SCSIIMG, sizeof(SCSIIMG));	// едеєе┴енSCSI BIOS
+		ZeroMemory(IPL, 0x2000);		// ├Л├Ь├В├О┬д├П8kb
+		memset(&IPL[0x2000], 0xff, 0x1e000);	// ┬╗├Д┬д├к┬д├П0xff
+		memcpy(IPL, SCSIIMG, sizeof(SCSIIMG));	// ┬е┬д┬е├│┬е├Б┬е┬нSCSI BIOS
 //		Memory_SetSCSIMode();
 	} else {
-		// SASIете╟еыд╧IPLдмд╜д╬д▐д▐╕лдиды
+		// SASI┬е├в┬е├З┬е├л┬д├ПIPL┬д┬м┬д┬╜┬д├О┬д├Ю┬д├Ю┬╕┬л┬д┬и┬д├л
 		memcpy(IPL, &IPL[0x20000], 0x20000);
 	}
 }
@@ -184,14 +188,14 @@ WinX68k_LoadROMs(void)
 	}
 
 	if (fp == 0) {
-		Error("BIOS ROM едесб╝е╕дм╕лд─длдъд▐д╗дє.");
+		Error("BIOS ROM ┬е┬д┬е├б┬б┬╝┬е┬╕┬д┬м┬╕┬л┬д├Д┬д┬л┬д├к┬д├Ю┬д┬╗┬д├│.");
 		return FALSE;
 	}
 
 	File_Read(fp, &IPL[0x20000], 0x20000);
 	File_Close(fp);
 
-	WinX68k_SCSICheck();	// SCSI IPLд╩дщбв$fc0000б┴д╦SCSI BIOSдЄ├╓дп
+	WinX68k_SCSICheck();	// SCSI IPL┬д├К┬д├й┬б┬в$fc0000┬б├Б┬д├ЛSCSI BIOS┬д├▓├Г├Ц┬д┬п
 
 	for (i = 0; i < 0x40000; i += 2) {
 		tmp = IPL[i];
@@ -201,19 +205,19 @@ WinX68k_LoadROMs(void)
 
 	fp = File_OpenCurDir((char *)FONTFILE);
 	if (fp == 0) {
-		// cgrom.tmpдмдвдыбй
+		// cgrom.tmp┬д┬м┬д┬в┬д├л┬б┬й
 		fp = File_OpenCurDir((char *)FONTFILETMP);
 		if (fp == 0) {
 #if 1
-			// е╒ейеєе╚└╕└о XXX
-			printf("е╒ейеєе╚ROMедесб╝е╕дм╕лд─длдъд▐д╗дє\n");
+			// ┬е├Х┬е┬й┬е├│┬е├И├А┬╕├А┬о XXX
+			printf("┬е├Х┬е┬й┬е├│┬е├ИROM┬е┬д┬е├б┬б┬╝┬е┬╕┬д┬м┬╕┬л┬д├Д┬д┬л┬д├к┬д├Ю┬д┬╗┬д├│\n");
 			return FALSE;
 #else
 			MessageBox(hWndMain,
-				"е╒ейеєе╚ROMедесб╝е╕дм╕лд─длдъд▐д╗дє.\nWindowsе╒ейеєе╚длдщ┐╖╡мд╦║ю└од╖д▐д╣.",
-				"д▒дэд╘б╝д╬есе├е╗б╝е╕", MB_ICONWARNING | MB_OK);
+				"┬е├Х┬е┬й┬е├│┬е├ИROM┬е┬д┬е├б┬б┬╝┬е┬╕┬д┬м┬╕┬л┬д├Д┬д┬л┬д├к┬д├Ю┬д┬╗┬д├│.\nWindows┬е├Х┬е┬й┬е├│┬е├И┬д┬л┬д├й┬┐┬╖┬╡┬м┬д├Л┬║├о├А┬о┬д┬╖┬д├Ю┬д┬╣.",
+				"┬д┬▒┬д├н┬д├Ф┬б┬╝┬д├О┬е├б┬е├Г┬е┬╗┬б┬╝┬е┬╕", MB_ICONWARNING | MB_OK);
 			SSTP_SendMes(SSTPMES_MAKEFONT);
-			make_cgromdat(FONT, FALSE, "г═г╙ е┤е╖е├еп", "г═г╙ ╠└─л");
+			make_cgromdat(FONT, FALSE, "┬г├Н┬г├У ┬е┬┤┬е┬╖┬е├Г┬е┬п", "┬г├Н┬г├У ├М├А├Д┬л");
 			//WinX68k_MakeFont();
 			//DialogBox(hInst, MAKEINTRESOURCE(IDD_PROGBAR),
 			//		hWndMain, (DLGPROC)MakeFontProc);
@@ -239,9 +243,9 @@ WinX68k_Reset(void)
 {
 	OPM_Reset();
 
-	C68k_Reset(&C68K);
-	C68k_Set_Reg(&C68K, C68K_A7, (IPL[0x30001]<<24)|(IPL[0x30000]<<16)|(IPL[0x30003]<<8)|IPL[0x30002]);
-	C68k_Set_Reg(&C68K, C68K_PC, (IPL[0x30005]<<24)|(IPL[0x30004]<<16)|(IPL[0x30007]<<8)|IPL[0x30006]);
+	m68000_reset();
+	m68000_set_reg(M68K_A7, (IPL[0x30001]<<24)|(IPL[0x30000]<<16)|(IPL[0x30003]<<8)|IPL[0x30002]);
+	m68000_set_reg(M68K_PC, (IPL[0x30005]<<24)|(IPL[0x30004]<<16)|(IPL[0x30007]<<8)|IPL[0x30006]);
 
 	Memory_Init();
 	CRTC_Init();
@@ -263,7 +267,8 @@ WinX68k_Reset(void)
 	MIDI_Init();
 	//WinDrv_Init();
 
-	C68K.ICount = 0;
+	C68KICount = m68000_get_cycles();
+	* C68KICount = 0;
 	m68000_ICountBk = 0;
 	ICount = 0;
 
@@ -318,7 +323,7 @@ WinX68k_Cleanup(void)
 
 #define CLOCK_SLICE 200
 // -----------------------------------------------------------------------------------
-//  е│евд╬дсдддєдыб╝д╫
+//  ┬е┬│┬е┬в┬д├О┬д├б┬д┬д┬д├│┬д├л┬б┬╝┬д├Ч
 // -----------------------------------------------------------------------------------
 void WinX68k_Exec(void)
 {
@@ -364,7 +369,7 @@ void WinX68k_Exec(void)
 
 	do {
 		int m, n = (ICount>CLOCK_SLICE)?CLOCK_SLICE:ICount;
-		C68K.ICount = m68000_ICountBk = 0;			// │фдъ╣■д▀╚п└╕┴░д╦═┐дид╞дкдлд╩ддд╚е└есб╩CARATб╦
+		(* C68KICount ) = m68000_ICountBk = 0;			// ┬│├д┬д├к┬╣├╛┬д├Я├И┬п├А┬╕├Б┬░┬д├Л├Н┬┐┬д┬и┬д├Ж┬д┬к┬д┬л┬д├К┬д┬д┬д├И┬е├А┬е├б┬б├КCARAT┬б├Л
 
 		if ( hsync ) {
 			hsync = 0;
@@ -381,9 +386,9 @@ void WinX68k_Exec(void)
 					MFP_Int(9);
 			} else {
 				if ( CRTC_VEND>=VLINE_TOTAL ) {
-					if ( (long)vline==(CRTC_VEND-VLINE_TOTAL) ) MFP_Int(9);		// еиене╡еде╞егеєе░евеяб╝д╚длб╩TOTAL<VENDб╦
+					if ( (long)vline==(CRTC_VEND-VLINE_TOTAL) ) MFP_Int(9);		// ┬е┬и┬е┬н┬е┬╡┬е┬д┬е├Ж┬е┬г┬е├│┬е┬░┬е┬в┬е├п┬б┬╝┬д├И┬д┬л┬б├КTOTAL<VEND┬б├Л
 				} else {
-					if ( (long)vline==(VLINE_TOTAL-1) ) MFP_Int(9);			// епеьеде╕б╝епещеде▐б╝д╧е│еьд╟д╩ддд╚е└есбй
+					if ( (long)vline==(VLINE_TOTAL-1) ) MFP_Int(9);			// ┬е┬п┬е├м┬е┬д┬е┬╕┬б┬╝┬е┬п┬е├й┬е┬д┬е├Ю┬б┬╝┬д├П┬е┬│┬е├м┬д├З┬д├К┬д┬д┬д├И┬е├А┬е├б┬б┬й
 				}
 			}
 		}
@@ -398,7 +403,7 @@ void WinX68k_Exec(void)
 			fp=fopen("_trace68.txt", "a");
 			for (i=0; i<HSYNC_CLK; i++)
 			{
-				m68k_disassemble(buf, C68k_Get_Reg(&C68K, C68K_PC));
+				m68k_disassemble(buf, m68000_get_reg(M68K_PC));
 //				if (MEM[0xa84c0]) /**test=1; */tracing=1000;
 //				if (regs.pc==0x9d2a) tracing=5000;
 //				if ((regs.pc>=0x2000)&&((regs.pc<=0x8e0e0))) tracing=50000;
@@ -407,16 +412,20 @@ void WinX68k_Exec(void)
 //				fp=fopen("_trace68.txt", "a");
 //				if ( (regs.pc==0x7176) /*&& (Memory_ReadW(oldpc)==0xff1a)*/ ) tracing=100;
 //				if ( (/*((regs.pc>=0x27000) && (regs.pc<=0x29000))||*/((regs.pc>=0x27000) && (regs.pc<=0x29000))) && (oldpc!=regs.pc))
-				if (/*fdctrace&&*/(oldpc != C68k_Get_Reg(&C68K, C68K_PC)))
+				if (/*fdctrace&&*/(oldpc != m68000_get_reg(M68K_PC)))
 				{
 //					//tracing--;
-				  fprintf(fp, "D0:%08X D1:%08X D2:%08X D3:%08X D4:%08X D5:%08X D6:%08X D7:%08X CR:%04X\n", C68K.D[0], C68K.D[1], C68K.D[2], C68K.D[3], C68K.D[4], C68K.D[5], C68K.D[6], C68K.D[7], 0/* xxx д╚дъдвдид║0 C68K.ccr */);
-				  fprintf(fp, "A0:%08X A1:%08X A2:%08X A3:%08X A4:%08X A5:%08X A6:%08X A7:%08X SR:%04X\n", C68K.A[0], C68K.A[1], C68K.A[2], C68K.A[3], C68K.A[4], C68K.A[5], C68K.A[6], C68K.A[7], C68k_Get_Reg(&C68K, C68K_SR) >> 8/* regs.sr_high*/);
-					fprintf(fp, "<%04X> (%08X ->) %08X : %s\n", Memory_ReadW(C68k_Get_Reg(&C68K, C68K_PC)), oldpc, C68k_Get_Reg(&C68K, C68K_PC), buf);
+				  fprintf(fp, "D0:%08X D1:%08X D2:%08X D3:%08X D4:%08X D5:%08X D6:%08X D7:%08X CR:%04X\n",
+					m68000_get_reg(M68K_D0), m68000_get_reg(M68K_D1), m68000_get_reg(M68K_D2), m68000_get_reg(M68K_D3),
+					m68000_get_reg(M68K_D4), m68000_get_reg(M68K_D5), m68000_get_reg(M68K_D6), m68000_get_reg(M68K_D7), 0);
+				  fprintf(fp, "A0:%08X A1:%08X A2:%08X A3:%08X A4:%08X A5:%08X A6:%08X A7:%08X SR:%04X\n", 
+					m68000_get_reg(M68K_A0), m68000_get_reg(M68K_A1), m68000_get_reg(M68K_A2), m68000_get_reg(M68K_A3),
+					m68000_get_reg(M68K_A4), m68000_get_reg(M68K_A5), m68000_get_reg(M68K_A6), m68000_get_reg(M68K_A7), 0);
+				fprintf(fp, "<%04X> (%08X ->) %08X : %s\n", Memory_ReadW(m68000_get_reg(M68K_PC)), oldpc, m68000_get_reg(M68K_PC), buf);
 				}
-				oldpc = C68k_Get_Reg(&C68K, C68K_PC);
-				C68K.ICount = 1;
-				C68k_Exec(&C68K, C68K.ICount);
+				oldpc = m68000_get_reg(M68K_PC);
+				* C68KICount = 1;
+				m68000_execute(* C68KICount);
 			}
 			fclose(fp);
 			usedclk = clk_line = HSYNC_CLK;
@@ -425,16 +434,16 @@ void WinX68k_Exec(void)
 		else
 #endif
 		{
-			C68K.ICount = n;
-			C68k_Exec(&C68K, C68K.ICount);
-			m = (n-C68K.ICount-m68000_ICountBk);			// ╖╨▓сепеэе├еп┐Ї
+			* C68KICount = n;
+			m68000_execute( * C68KICount);
+			m = (n-(* C68KICount) -m68000_ICountBk);			// ┬╖├Р┬▓├б┬е┬п┬е├н┬е├Г┬е┬п┬┐├┤
 			ClkUsed += m*10;
 			usedclk = ClkUsed/clkdiv;
 			clk_line += usedclk;
 			ClkUsed -= usedclk*clkdiv;
 			ICount -= m;
 			clk_count += m;
-			C68K.ICount = m68000_ICountBk = 0;
+			(* C68KICount )= m68000_ICountBk = 0;
 		}
 
 		MFP_Timer(usedclk);
@@ -450,11 +459,11 @@ void WinX68k_Exec(void)
 			if ( (MFP[MFP_AER]&0x40)&&(vline==CRTC_IntLine) )
 				MFP_Int(1);
 			if ( (!DispFrame)&&(vline>=CRTC_VSTART)&&(vline<CRTC_VEND) ) {
-				if ( CRTC_VStep==1 ) {				// HighReso 256dotб╩2┼┘╞╔д▀б╦
+				if ( CRTC_VStep==1 ) {				// HighReso 256dot┬б├К2├Е├Щ├Ж├Й┬д├Я┬б├Л
 					if ( vline%2 )
 						WinDraw_DrawLine();
 				} else if ( CRTC_VStep==4 ) {		// LowReso 512dot
-					WinDraw_DrawLine();				// 1┴Ў║║└■д╟2▓є╔┴дпб╩едеєе┐б╝еьб╝е╣б╦
+					WinDraw_DrawLine();				// 1├Б├╢┬║┬║├А├╛┬д├З2┬▓├│├Й├Б┬д┬п┬б├К┬е┬д┬е├│┬е┬┐┬б┬╝┬е├м┬б┬╝┬е┬╣┬б├Л
 					VLINE++;
 					WinDraw_DrawLine();
 				} else {							// High 512dot / Low 256dot
@@ -487,12 +496,12 @@ void WinX68k_Exec(void)
 		}
 	} while ( vline<VLINE_TOTAL );
 
-	if ( CRTC_Mode&2 ) {		// FastClrе╙е├е╚д╬─┤└░б╩PITAPATб╦
-		if ( CRTC_FastClr ) {	// FastClr=1 │юд─ CRTC_Mode&2 д╩дщ ╜к╬╗
+	if ( CRTC_Mode&2 ) {		// FastClr┬е├У┬е├Г┬е├И┬д├О├Д┬┤├А┬░┬б├КPITAPAT┬б├Л
+		if ( CRTC_FastClr ) {	// FastClr=1 ┬│├о┬д├Д CRTC_Mode&2 ┬д├К┬д├й ┬╜┬к├О┬╗
 			CRTC_FastClr--;
 			if ( !CRTC_FastClr )
 				CRTC_Mode &= 0xfd;
-		} else {				// FastClr│л╗╧
+		} else {				// FastClr┬│┬л┬╗├П
 			if ( CRTC_Regs[0x29]&0x10 )
 				CRTC_FastClr = 1;
 			else
@@ -596,6 +605,12 @@ int main(int argc, char *argv[])
 
 	p6logd("PX68K Ver.%s\n", PX68KVERSTR);
 
+#ifdef CYCLONE
+	p6logd("Using Cyclone ARM emulation\n");
+#else
+	p6logd("Using C emulation\n");
+#endif
+
 #ifdef RFMDRV
 	struct sockaddr_in dest;
 
@@ -616,7 +631,7 @@ int main(int argc, char *argv[])
     puts(winx68k_dir);
 
 	LoadConfig();
-
+#ifndef FAKESDL
 #ifndef NOSOUND
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
 		p6logd("SDL_Init error\n");		
@@ -630,8 +645,11 @@ int main(int argc, char *argv[])
 	}
 #endif
 
+#endif
 #if !SDL_VERSION_ATLEAST(2, 0, 0)
 	SDL_WM_SetCaption(APPNAME" SDL", NULL);
+
+#ifndef FAKESDL
 #ifndef PSP
         if (SDL_SetVideoMode(FULLSCREEN_WIDTH, FULLSCREEN_HEIGHT, 16, SDL_SWSURFACE) == NULL) {
 #else
@@ -640,12 +658,14 @@ int main(int argc, char *argv[])
 		puts("SDL_SetVideoMode() failed");
 		return 1;
 	}
+#endif // FAKESDL
+
 #else
 #ifdef USE_OGLES11
 	SDL_DisplayMode sdl_dispmode;
 	SDL_GetCurrentDisplayMode(0, &sdl_dispmode);
 	p6logd("width: %d height: %d", sdl_dispmode.w, sdl_dispmode.h);
-	// е╩е╙е▓б╝е╖ечеєе╨б╝дЄ╜№дпеве╫еъдм┐идьды▓ш╠╠
+	// ┬е├К┬е├У┬е┬▓┬б┬╝┬е┬╖┬е├з┬е├│┬е├Р┬б┬╝┬д├▓┬╜├╝┬д┬п┬е┬в┬е├Ч┬е├к┬д┬м┬┐┬и┬д├м┬д├л┬▓├и├М├М
 	realdisp_w = sdl_dispmode.w, realdisp_h = sdl_dispmode.h;
 
 	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 1 );
@@ -656,11 +676,11 @@ int main(int argc, char *argv[])
 #if TARGET_OS_IPHONE
 	sdl_window = SDL_CreateWindow(APPNAME" SDL", 0, 0, FULLSCREEN_WIDTH, FULLSCREEN_HEIGHT, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN|SDL_WINDOW_BORDERLESS);
 #else
-	// for Android: window sizeд╬╗╪─ъд╧┤╪╖╕д╩дпе╒еые╣епеъб╝еєд╦д╩дыд▀д┐дд
+	// for Android: window sizeя┐╜╬╗я┐╜я┐╜я┐╜я┐╜╧┤╪╖я┐╜я┐╜╩дя┐╜я┐╜╒еые╣я┐╜я┐╜я┐╜ъб╝я┐╜я┐╜я┐╜╦д╩дя┐╜я┐╜▀дя┐╜я┐╜я┐╜
 	sdl_window = SDL_CreateWindow(APPNAME" SDL", 0, 0, FULLSCREEN_WIDTH, FULLSCREEN_HEIGHT, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN);
 #endif
 #else
-	sdl_window = SDL_CreateWindow(APPNAME" SDL", 0, 0, FULLSCREEN_WIDTH, FULLSCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+	sdl_window = SDL_CreateWindow(APPNAME" SDL", 0, 0, FULLSCREEN_WIDTH, FULLSCREEN_HEIGHT, SDL_WINDOW_HIDDEN);
 #endif
 	if (sdl_window == NULL) {
 		p6logd("sdl_window: %ld", sdl_window);
@@ -676,22 +696,24 @@ int main(int argc, char *argv[])
 	glEnable(GL_BLEND);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	//glViewport(0, 0, 800, 600); //д│д│дЄ┴¤дфд╡д╩ддд╚OpenGLд╬▓ш╠╠д╧д╗д▐дд
+	//glViewport(0, 0, 800, 600); //я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜фд╡я┐╜╩дя┐╜я┐╜я┐╜OpenGLя┐╜╬▓я┐╜я┐╜╠д╧дя┐╜я┐╜▐дя┐╜
 	glViewport(0, 0, sdl_dispmode.w, sdl_dispmode.h);
-	// е╣е▐е█дфе┐е╓д╬╝┬▓ш╠╠д╦┤╪╖╕д╩дпOpenGLд╬╔┴▓ш╬╬░шдЄ800x600д╚д╣дыбг
-	// 800x600д╦д╖д┐░╒╠гд╧╞├д╦д╩ддбг
+	// я┐╜я┐╜я┐╜▐е█дфе┐я┐╜╓д╬╝┬▓я┐╜я┐╜╠д╦┤╪╖я┐╜я┐╜╩дя┐╜OpenGLя┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜╬░я┐╜я┐╜я┐╜800x600я┐╜╚дя┐╜я┐╜ыбг
+	// 800x600я┐╜╦дя┐╜я┐╜я┐╜я┐╜я┐╜╠гя┐╜я┐╜я┐╜├д╦д╩дя┐╜я┐╜я┐╜
 	glOrthof(0, 800, 600, 0, -1, 1);
 	//  glOrthof(0, 1024, 0, 1024, -1, 1);
 	glMatrixMode(GL_MODELVIEW);
 #endif
 #endif // !SDL_VERSION_ATLEAST(2, 0, 0)
 
+
+//#ifndef FAKESDL
 	if (!WinDraw_MenuInit()) {
 		WinX68k_Cleanup();
 		WinDraw_Cleanup();
 		return 1;
 	}
-
+//#endif
 	SplashFlag = 20;
 	SoundSampleRate = Config.SampleRate;
 
@@ -714,13 +736,15 @@ int main(int argc, char *argv[])
 		exit (1);
 	}
 
-	Keyboard_Init(); //WinDraw_Init()┴░д╦░▄╞░
+	Keyboard_Init(); //WinDraw_Init()я┐╜я┐╜я┐╜╦░я┐╜╞░
 
+//#ifndef FAKESDL
 	if (!WinDraw_Init()) {
 		WinDraw_Cleanup();
 		Error("Error: Can't init screen.\n");
 		return 1;
 	}
+//#endif
 
 	if ( SoundSampleRate ) {
 		ADPCM_Init(SoundSampleRate);
@@ -745,7 +769,7 @@ int main(int argc, char *argv[])
 	Timer_Init();
 
 	MIDI_Init();
-	MIDI_SetMimpiMap(Config.ToneMapFile);	// ▓╗┐з└▀─ъе╒ебедеы╗╚═╤╚┐▒╟
+	MIDI_SetMimpiMap(Config.ToneMapFile);	// я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜╒ея┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜╚┐я┐╜я┐╜
 	MIDI_EnableMimpiDef(Config.ToneMap);
 
 	if (sdlaudio == 0 && !DSound_Init(Config.SampleRate, Config.BufferSize)) {
@@ -760,7 +784,7 @@ int main(int argc, char *argv[])
 #endif
 	DSound_Play();
 
-	// command line длдщ╗╪─ъд╖д┐╛ь╣ч
+	// command line я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ъд╖я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜
 	switch (argc) {
 	case 3:
 		strcpy(Config.FDDImage[1], argv[2]);
@@ -914,7 +938,7 @@ int main(int argc, char *argv[])
 		if (menu_mode == menu_out
 		    && Joystick_get_downstate_psp(PSP_CTRL_SELECT)) {
 			Keyboard_ToggleSkbd();
-			// 2┼┘╞╔д▀╜№д▒
+			// 2я┐╜я┐╜я┐╜╔д▀╜я┐╜я┐╜я┐╜
 			Joystick_reset_downstate_psp(PSP_CTRL_SELECT);
 		}
 
@@ -1002,9 +1026,9 @@ int main(int argc, char *argv[])
 
 	}
 end_loop:
-	Memory_WriteB(0xe8e00d, 0x31);	// SRAM╜ёдн╣■д▀╡Ў▓─
-	Memory_WriteD(0xed0040, Memory_ReadD(0xed0040)+1); // └╤╗╗▓╘╞п╗■┤╓(min.)
-	Memory_WriteD(0xed0044, Memory_ReadD(0xed0044)+1); // └╤╗╗╡п╞░▓є┐Ї
+	Memory_WriteB(0xe8e00d, 0x31);	// SRAMя┐╜ёдн╣я┐╜я┐╜▀╡я┐╜я┐╜я┐╜
+	Memory_WriteD(0xed0040, Memory_ReadD(0xed0040)+1); // я┐╜╤╗я┐╜я┐╜я┐╜╞пя┐╜я┐╜я┐╜я┐╜(min.)
+	Memory_WriteD(0xed0044, Memory_ReadD(0xed0044)+1); // я┐╜╤╗я┐╜я┐╜я┐╜╞░я┐╜я┐╜я┐╜я┐╜
 
 	OPM_Cleanup();
 #ifndef	NO_MERCURY

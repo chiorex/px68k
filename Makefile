@@ -1,5 +1,6 @@
 include version.txt
 
+AS   = as
 CC	 = gcc
 CXX	 = c++
 CXXLINK	 = $(CXX)
@@ -9,12 +10,19 @@ DEPEND	 = gccmakedep
 DEPEND_DEFINES =
 
 # for debug
-CDEBUGFLAGS = -g -O0 -fno-strict-aliasing
+debug: CDEBUGFLAGS = -g -O0 -fno-strict-aliasing -W
+debug: CFLAGS += -DWIN68DEBUG
+
+all:: CDEBUGFLAGS = -O2
+
+ifdef FAKESDL
+CFLAGS += -DFAKESDL
+endif
 
 #
 # enable SDL_gfx
 #
-CDEBUGFLAGS+= -DUSE_SDLGFX
+#CFLAGS+= -DUSE_SDLGFX
 
 #
 # disable sound
@@ -24,7 +32,7 @@ CDEBUGFLAGS+= -DUSE_SDLGFX
 #
 # disable mercury unit
 #
-CDEBUGFLAGS+= -DNO_MERCURY
+CFLAGS+= -DNO_MERCURY
 
 #
 # enable RFMDRV
@@ -53,7 +61,7 @@ CDEBUGFLAGS+= -DNO_MERCURY
 # CDEBUGFLAGS+= -DINLINE=
 # CDEBUGFLAGS+= -DUSE_GAS
 
-CDEBUGFLAGS+=-DPX68K_VERSION=$(PX68K_VERSION)
+CFLAGS+=-DPX68K_VERSION=$(PX68K_VERSION)
 
 ifdef SDL2
 # SDL 2.0
@@ -70,10 +78,14 @@ else
 SDL_LIB=	`$(SDL_CONFIG) --libs` -lSDL_gfx
 endif
 
-ifeq ($(shell uname -m),armv6l)
-	MOPT=
+ifeq ($(shell uname -m),armv7l)
+	MOPT= -mcpu=cortex-a53  -mfpu=neon-fp-armv8
 else
 	MOPT= -m32
+endif
+
+ifdef CYCLONE
+CFLAGS += -DCYCLONE
 endif
 
 LDLIBS = -lm
@@ -82,11 +94,18 @@ EXTRA_INCLUDES= -I./x11 -I./x68k -I./fmgen -I./win32api $(SDL_INCLUDE)
 
 CXXDEBUGFLAGS= $(CDEBUGFLAGS)
 
-CFLAGS= $(MOPT) $(CDEBUGFLAGS) $(EXTRA_INCLUDES)
-CXXFLAGS= $(MOPT) $(CXXDEBUGFLAGS) $(EXTRA_INCLUDES)
-CXXLDOPTIONS= $(CXXDEBUGFLAGS)
+CFLAGS+= $(MOPT) $(CDEBUGFLAGS) $(EXTRA_INCLUDES)
+CXXFLAGS= $(CFLAGS)
+CXXLDOPTIONS+= $(CXXDEBUGFLAGS)
 
-CPUOBJS= x68k/d68k.o m68000/c68k.o m68000/m68000.o
+CYCLONEOBJ = m68000/cyclone.o
+C68KOBJ =  m68000/c68k.o
+
+ifdef CYCLONE
+CPUOBJS= x68k/d68k.o m68000/m68000.o $(CYCLONEOBJ)
+else
+CPUOBJS= x68k/d68k.o m68000/m68000.o $(C68KOBJ)
+endif
 
 X68KOBJS= x68k/adpcm.o x68k/bg.o x68k/crtc.o x68k/dmac.o x68k/fdc.o x68k/fdd.o x68k/disk_d88.o x68k/disk_dim.o x68k/disk_xdf.o x68k/gvram.o x68k/ioc.o x68k/irqh.o x68k/mem_wrap.o x68k/mercury.o x68k/mfp.o x68k/palette.o x68k/midi.o x68k/pia.o x68k/rtc.o x68k/sasi.o x68k/scc.o x68k/scsi.o x68k/sram.o x68k/sysport.o x68k/tvram.o
 
@@ -106,7 +125,10 @@ CSRCS=		$(COBJS:.o=.c)
 CXXSRCS=	$(CXXOBJS:.o=.cpp)
 SRCS=		$(CSRCS) $(CXXSRCS)
 
-.SUFFIXES: .c .cpp
+.SUFFIXES: .c .cpp .s
+
+.s.o:
+	$(AS) -o $@ $*.s
 
 .c.o:
 	$(CC) -o $@ $(CFLAGS) -c $*.c
@@ -115,6 +137,7 @@ SRCS=		$(CSRCS) $(CXXSRCS)
 	$(CXX) -o $@ $(CXXFLAGS) -c $*.cpp
 
 all:: px68k
+debug:: px68k
 
 px68k: $(OBJS)
 	$(RM) $@
@@ -125,7 +148,7 @@ depend::
 
 clean::
 	$(RM) px68k
-	$(RM) $(OBJS)
+	$(RM) $(OBJS) $(C68KOBJ) $(CYCLONEOBJ)
 	$(RM) *.CKP *.ln *.BAK *.bak *.o core errs ,* *~ *.a .emacs_* tags TAGS make.log MakeOut   "#"*
 
 tags::

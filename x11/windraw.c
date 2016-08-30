@@ -60,7 +60,7 @@ WORD *ScrBufL = 0, *ScrBufR = 0;
 WORD *ScrBuf = 0;
 #endif
 
-#if defined(PSP) || defined(USE_OGLES11)
+#if defined(PSP) || defined(USE_OGLES11) || defined(FAKESDL)
 WORD *menu_buffer;
 WORD *kbd_buffer;
 #endif
@@ -276,6 +276,11 @@ int WinDraw_Init(void)
 {
 	int i, j;
 
+#ifdef FAKESDL
+        ScrBuf = malloc(800 * 600 * 2);
+	return TRUE;
+#endif
+
 #ifndef USE_OGLES11
 	SDL_Surface *sdl_surface;
 
@@ -480,6 +485,9 @@ void draw_all_buttons(GLfloat *tex, GLfloat *ver, GLfloat scale, int is_menu)
 void FASTCALL
 WinDraw_Draw(void)
 {
+#ifdef FAKESDL
+	return;
+#endif
 	SDL_Surface *sdl_surface;
 	static int oldtextx = -1, oldtexty = -1;
 
@@ -1689,7 +1697,19 @@ int WinDraw_MenuInit(void)
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 	menu_surface = SDL_CreateRGBSurface(SDL_SWSURFACE, 800, 600, 16, WinDraw_Pal16R, WinDraw_Pal16G, WinDraw_Pal16B, 0);
-#else
+#elif FAKESDL
+	menu_buffer = malloc(1024 * 1024 * 2);
+        if (menu_buffer == NULL) {
+                return FALSE;
+        }
+        set_sbp(menu_buffer);
+        set_mfs(24);
+	set_mcolor(0xffff);
+        set_mbcolor(0);
+
+	return TRUE;
+
+#else 
 	menu_surface = SDL_GetVideoSurface();
 #endif
 

@@ -490,7 +490,7 @@ rm_buserr(DWORD addr)
 void Memory_Init(void)
 {
 
-	cpu_setOPbase24((DWORD)C68k_Get_Reg(&C68K, C68K_PC));
+	cpu_setOPbase24((DWORD)m68000_get_reg(M68K_PC));
 }
 
 void FASTCALL
@@ -552,11 +552,11 @@ Memory_ErrTrace(void)
 	FILE *fp;
 	fp=fopen("_buserr.txt", "a");
 	if (BusErrFlag==3)
-		fprintf(fp, "BusErr - SetOP to $%08X  @ $%08X\n", BusErrAdr, regs.pc);
+		fprintf(fp, "BusErr - SetOP to $%08X  @ $%08X\n", BusErrAdr, m68000_get_reg(M68K_PC));
 	else if (BusErrFlag==2)
-		fprintf(fp, "BusErr - Write to $%08X  @ $%08X\n", BusErrAdr, regs.pc);
+		fprintf(fp, "BusErr - Write to $%08X  @ $%08X\n", BusErrAdr, m68000_get_reg(M68K_PC));
 	else
-		fprintf(fp, "BusErr - Read from $%08X  @ $%08X\n", BusErrAdr, regs.pc);
+		fprintf(fp, "BusErr - Read from $%08X  @ $%08X\n", BusErrAdr, m68000_get_reg(M68K_PC));
 	fclose(fp);
 //	traceflag ++;
 //	m68000_ICount = 0;
@@ -569,7 +569,7 @@ Memory_IntErr(int i)
 #ifdef WIN68DEBUG
 	FILE *fp;
 	fp=fopen("_interr.txt", "a");
-	fprintf(fp, "IntErr - Int.No%d  @ $%08X\n", i, regs.pc);
+	fprintf(fp, "IntErr - Int.No%d  @ $%08X\n", i, m68000_get_reg(M68K_PC));
 	fclose(fp);
 #else
 	(void)i;
