@@ -15,6 +15,14 @@ struct Cyclone m68k;
 #endif
 
 
+int cycleEpoch;
+int lastTraceCycleEpoch = 0;
+int tracing = 0;
+clock_t microEpoch, microCurrent;
+
+#include <stdlib.h>
+#include <signal.h>
+
 #include "../x68k/memory.h"
 
 
@@ -38,15 +46,21 @@ unsigned int read16(unsigned int a) {
 
 unsigned int MyCheckPc(unsigned int pc)
 {
+
+
   pc-= m68k.membase; // Get the real program counter
 
-  if (pc <= 0xbfffff) 			       	m68k.membase=(int) MEM;
-  if (pc <= 0xc7ffff) 			   	m68k.membase=(int) GVRAM - 0xc00000;
+  if (!tracing) {
+  	//p6logd("CheckPC 0x%08X\n", pc);
+  }
+
+  if (pc <= 0xbfffff) 			       					{ m68k.membase=(int) MEM; return m68k.membase+pc; }
+  if ((pc >= 0xfc0000) && (pc <= 0xffffff))	{ m68k.membase=(int) IPL - 0xfc0000; return m68k.membase+pc; }
+  if ((pc >= 0xc00000) && (pc <= 0xc7ffff)) m68k.membase=(int) GVRAM - 0xc00000;
   if ((pc >= 0xe00000) && (pc <= 0xe7ffff))	m68k.membase=(int) TVRAM - 0xe00000;
   if ((pc >= 0xea0000) && (pc <= 0xea1fff))	m68k.membase=(int) SCSIIPL - 0xea0000;
   if ((pc >= 0xed0000) && (pc <= 0xed3fff))	m68k.membase=(int) SRAM - 0xed0000;
   if ((pc >= 0xf00000) && (pc <= 0xfbffff))	m68k.membase=(int) FONT - 0xf00000;
-  if ((pc >= 0xfc0000) && (pc <= 0xffffff))	m68k.membase=(int) IPL - 0xfc0000;
 
   return m68k.membase+pc; // New program counter
 }
@@ -80,13 +94,13 @@ void m68000_init(void)
 	C68k_Set_ReadW(&C68K, Memory_ReadW);
 	C68k_Set_WriteB(&C68K, Memory_WriteB);
 	C68k_Set_WriteW(&C68K, Memory_WriteW);
-    C68k_Set_Fetch(&C68K, 0x000000, 0xbfffff, (UINT32)MEM);
-    C68k_Set_Fetch(&C68K, 0xc00000, 0xc7ffff, (UINT32)GVRAM);
-    C68k_Set_Fetch(&C68K, 0xe00000, 0xe7ffff, (UINT32)TVRAM);
-    C68k_Set_Fetch(&C68K, 0xea0000, 0xea1fff, (UINT32)SCSIIPL);
-    C68k_Set_Fetch(&C68K, 0xed0000, 0xed3fff, (UINT32)SRAM);
-    C68k_Set_Fetch(&C68K, 0xf00000, 0xfbffff, (UINT32)FONT);
-    C68k_Set_Fetch(&C68K, 0xfc0000, 0xffffff, (UINT32)IPL);
+  C68k_Set_Fetch(&C68K, 0x000000, 0xbfffff, (UINT32)MEM);
+  C68k_Set_Fetch(&C68K, 0xc00000, 0xc7ffff, (UINT32)GVRAM);
+  C68k_Set_Fetch(&C68K, 0xe00000, 0xe7ffff, (UINT32)TVRAM);
+  C68k_Set_Fetch(&C68K, 0xea0000, 0xea1fff, (UINT32)SCSIIPL);
+  C68k_Set_Fetch(&C68K, 0xed0000, 0xed3fff, (UINT32)SRAM);
+  C68k_Set_Fetch(&C68K, 0xf00000, 0xfbffff, (UINT32)FONT);
+  C68k_Set_Fetch(&C68K, 0xfc0000, 0xffffff, (UINT32)IPL);
 
     #endif
 }
@@ -102,7 +116,9 @@ void m68000_reset(void)
 
 	CycloneReset(&m68k);
 	m68k.state_flags = 0; // Go to default state (not stopped, halted, etc.)
-   	m68k.srh = 0x27; // Set supervisor mode
+	m68k.srh = 0x27; // Set supervisor mode
+	cycleEpoch = 0;
+	microEpoch = clock();
  
 	#else
 
@@ -124,13 +140,12 @@ void m68000_exit(void)
 	CPU¼Â¹Ô
 --------------------------------------------------------*/
 
-int cycleEpoch = 0;
-int lastTraceCycleEpoch = 0;
 
 int m68000_execute(int cycles)
 {
 
 	int cyclesLeft;
+	float emuSeconds, realSeconds;
 	#ifdef CYCLONE
 
 	m68k.cycles = cycles;
@@ -145,9 +160,18 @@ int m68000_execute(int cycles)
 
 	cycleEpoch += (cycles - cyclesLeft);
 
-	p6logd("Cycles: %d\n", cycleEpoch);
 
-	if (cycleEpoch > (lastTraceCycleEpoch + 100) ) {
+	if (cycleEpoch > (lastTraceCycleEpoch + 1000000) ) {
+
+		tracing = 1;
+
+		microCurrent = clock();
+
+		emuSeconds = (float)cycleEpoch / 10000000.0;
+		realSeconds = (microCurrent - microEpoch) / 1000000.0;
+
+		p6logd("Cycles: %d Emulated: %.1fs Real: %.1fs Speed: %.1f \n", cycleEpoch, emuSeconds, realSeconds, emuSeconds/  realSeconds );
+				
 	
 		p6logd("D0:%08X D1:%08X D2:%08X D3:%08X D4:%08X D5:%08X D6:%08X D7:%08X CR:%04X\n",
 			m68000_get_reg(M68K_D0), m68000_get_reg(M68K_D1), m68000_get_reg(M68K_D2), m68000_get_reg(M68K_D3),
@@ -157,7 +181,13 @@ int m68000_execute(int cycles)
 			m68000_get_reg(M68K_A4), m68000_get_reg(M68K_A5), m68000_get_reg(M68K_A6), m68000_get_reg(M68K_A7), 0);
 		p6logd("PC:%08X (%04X) \n", m68000_get_reg(M68K_PC), Memory_ReadW(m68000_get_reg(M68K_PC)));
 
+		tracing = 0;
+
 		lastTraceCycleEpoch = cycleEpoch;
+	}
+
+	if (cycleEpoch > 20000000) {
+//		exit(1);
 	}
 
 	return cyclesLeft;

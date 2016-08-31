@@ -45,7 +45,7 @@ static void mouse_update_psp(SceCtrlData psppad);
 #endif
 BYTE JoyPortData[2];
 
-#if defined(ANDROID) || TARGET_OS_IPHONE
+#if defined(ANDROID) || defined(TARGET_OS_IPHONE) || defined(USE_OGLES11)
 
 #define VBTN_MAX 8
 #define VBTN_NOUSE 0

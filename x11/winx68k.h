@@ -38,7 +38,7 @@ extern	BYTE	FrameChanged;
 
 extern const BYTE PrgTitle[];
 
-#if defined(ANDROID) || TARGET_OS_IPHONE
+#if defined(ANDROID) || defined(TARGET_OS_IPHONE) || defined(USE_OGLES11)
 extern int realdisp_w, realdisp_h;
 #endif
 

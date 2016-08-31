@@ -38,9 +38,10 @@ DWORD FASTCALL IRQH_DefaultVector(BYTE irq)
 // -----------------------------------------------------------------------
 void IRQH_IRQCallBack(BYTE irq)
 {
+	//p6logd("In IRQCallback: %d\n", irq);
 	int i;
 	IRQH_IRQ[irq] = 0;
-	m68000_reset_irq_line(0);
+	m68000_reset_irq_line(irq);
 	for (i=7; i>0; i--)
 	{
 		if (IRQH_IRQ[i])

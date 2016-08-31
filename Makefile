@@ -12,6 +12,7 @@ DEPEND_DEFINES =
 # for debug
 debug: CDEBUGFLAGS = -g -O0 -fno-strict-aliasing -W
 debug: CFLAGS += -DWIN68DEBUG
+debug: ASFLAGS += -g
 
 all:: CDEBUGFLAGS = -O2
 
@@ -24,6 +25,7 @@ endif
 #
 #CFLAGS+= -DUSE_SDLGFX
 
+CFLAGS+= -DUSE_OGLES11
 #
 # disable sound
 #
@@ -32,7 +34,7 @@ endif
 #
 # disable mercury unit
 #
-CFLAGS+= -DNO_MERCURY
+#CFLAGS+= -DNO_MERCURY
 
 #
 # enable RFMDRV
@@ -73,7 +75,7 @@ endif
 
 SDL_INCLUDE=	`$(SDL_CONFIG) --cflags`
 ifdef SDL2
-SDL_LIB=	`$(SDL_CONFIG) --libs` -lSDL2_gfx
+SDL_LIB=	`$(SDL_CONFIG) --libs` -lSDL2_gfx -L/opt/vc/lib -lGLESv2
 else
 SDL_LIB=	`$(SDL_CONFIG) --libs` -lSDL_gfx
 endif
@@ -128,7 +130,7 @@ SRCS=		$(CSRCS) $(CXXSRCS)
 .SUFFIXES: .c .cpp .s
 
 .s.o:
-	$(AS) -o $@ $*.s
+	$(AS) -o $@ $(ASFLAGS) $*.s
 
 .c.o:
 	$(CC) -o $@ $(CFLAGS) -c $*.c

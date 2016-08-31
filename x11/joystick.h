@@ -28,7 +28,7 @@
 #define JOYAXISPLAY 2048
 #endif
 
-#if defined(ANDROID) || TARGET_OS_IPHONE
+#if defined(ANDROID) || defined(TARGET_OS_IPHONE) || defined(USE_OGLES11)
 #define VBTN_ON 2
 #define VBTN_OFF 1
 
@@ -63,7 +63,7 @@ void Joystick_reset_downstate_psp(DWORD ctrl_bit);
 void Joystatic_reset_anapad_psp(void);
 void Joystick_mv_anapad_psp(void);
 #endif
-#if defined(ANDROID) || TARGET_OS_IPHONE
+#if defined(ANDROID) || defined(TARGET_OS_IPHONE) || defined(USE_OGLES11)
 VBTN_POINTS *Joystick_get_btn_points(float scale);
 void Joystick_Vbtn_Update(float scale);
 BYTE Joystick_get_vbtn_state(WORD n);
