@@ -10,14 +10,14 @@ DEPEND	 = gccmakedep
 DEPEND_DEFINES =
 
 # for debug
-debug: CDEBUGFLAGS = -g -O0 -fno-strict-aliasing -W
+debug: CDEBUGFLAGS = -g -O0 -fno-strict-aliasing -W -pg
 debug: CFLAGS += -DWIN68DEBUG
 debug: ASFLAGS += -g
 
 all:: CDEBUGFLAGS = -O2
 
-ifdef FAKESDL
-CFLAGS += -DFAKESDL
+ifdef SDL2
+CFLAGS += -DUSE_OGLES11
 endif
 
 #
@@ -25,7 +25,6 @@ endif
 #
 #CFLAGS+= -DUSE_SDLGFX
 
-CFLAGS+= -DUSE_OGLES11
 #
 # disable sound
 #

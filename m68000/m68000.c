@@ -15,8 +15,8 @@ struct Cyclone m68k;
 #endif
 
 
-int cycleEpoch;
-int lastTraceCycleEpoch = 0;
+long long cycleEpoch;
+long long lastTraceMicro = 0, lastTraceCycleEpoch = 0;
 int tracing = 0;
 clock_t microEpoch, microCurrent;
 
@@ -145,7 +145,7 @@ int m68000_execute(int cycles)
 {
 
 	int cyclesLeft;
-	float emuSeconds, realSeconds;
+	float emuSampleSeconds, realSampleSeconds, emuTotalSeconds, realTotalSeconds;
 	#ifdef CYCLONE
 
 	m68k.cycles = cycles;
@@ -161,16 +161,26 @@ int m68000_execute(int cycles)
 	cycleEpoch += (cycles - cyclesLeft);
 
 
-	if (cycleEpoch > (lastTraceCycleEpoch + 1000000) ) {
+	if (cycleEpoch > (lastTraceCycleEpoch + 10000000) ) {
 
 		tracing = 1;
 
 		microCurrent = clock();
 
-		emuSeconds = (float)cycleEpoch / 10000000.0;
-		realSeconds = (microCurrent - microEpoch) / 1000000.0;
+		
+		emuTotalSeconds = ((float) cycleEpoch) / 10000000.0;
+		emuSampleSeconds = ((float) cycleEpoch - lastTraceCycleEpoch) / 10000000.0;
 
-		p6logd("Cycles: %d Emulated: %.1fs Real: %.1fs Speed: %.1f \n", cycleEpoch, emuSeconds, realSeconds, emuSeconds/  realSeconds );
+		realTotalSeconds = (microCurrent - microEpoch) / 1000000.0;
+		realSampleSeconds = (microCurrent - lastTraceMicro) / 1000000.0;
+
+		p6logd("Cycles: %lld Et: %.1fs Rt: %.1fs Es: %.2fs Rs: %.2fs Speed: %.1f \n", 
+			cycleEpoch, 
+			emuTotalSeconds, 
+			realTotalSeconds,
+			emuSampleSeconds,
+			realSampleSeconds,
+			emuSampleSeconds/  realSampleSeconds );
 				
 	
 		p6logd("D0:%08X D1:%08X D2:%08X D3:%08X D4:%08X D5:%08X D6:%08X D7:%08X CR:%04X\n",
@@ -184,6 +194,7 @@ int m68000_execute(int cycles)
 		tracing = 0;
 
 		lastTraceCycleEpoch = cycleEpoch;
+		lastTraceMicro = microCurrent;
 	}
 
 	if (cycleEpoch > 20000000) {

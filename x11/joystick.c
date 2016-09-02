@@ -61,7 +61,10 @@ typedef struct _vbtn_rect {
 
 VBTN_RECT vbtn_rect[VBTN_MAX];
 BYTE vbtn_state[VBTN_MAX];
+
+#if defined(ANDROID) || TARGET_OS_IPHONE
 SDL_TouchID touchId = -1;
+#endif
 
 #define SET_VBTN(id, bx, by, s)					\
 {								\

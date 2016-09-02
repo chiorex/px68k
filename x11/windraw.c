@@ -47,6 +47,7 @@
 #include "tvram.h"
 #include "joystick.h"
 #include "keyboard.h"
+#include "time.h"
 
 #if 0
 #include "../icons/keropi.xpm"
@@ -60,7 +61,7 @@ WORD *ScrBufL = 0, *ScrBufR = 0;
 WORD *ScrBuf = 0;
 #endif
 
-#if defined(PSP) || defined(USE_OGLES11) || defined(FAKESDL)
+#if defined(PSP) || defined(USE_OGLES11) 
 WORD *menu_buffer;
 WORD *kbd_buffer;
 #endif
@@ -96,6 +97,8 @@ static GLuint texid[11];
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 extern SDL_Window *sdl_window;
 #endif
+
+clock_t microStart, microEnd, microLastSample = 0;
 
 void WinDraw_InitWindowSize(WORD width, WORD height)
 {
@@ -275,11 +278,6 @@ static void draw_kbd_to_tex(void);
 int WinDraw_Init(void)
 {
 	int i, j;
-
-#ifdef FAKESDL
-        ScrBuf = malloc(800 * 600 * 2);
-	return TRUE;
-#endif
 
 #ifndef USE_OGLES11
 	SDL_Surface *sdl_surface;
@@ -485,9 +483,6 @@ void draw_all_buttons(GLfloat *tex, GLfloat *ver, GLfloat scale, int is_menu)
 void FASTCALL
 WinDraw_Draw(void)
 {
-#ifdef FAKESDL
-	return;
-#endif
 	SDL_Surface *sdl_surface;
 	static int oldtextx = -1, oldtexty = -1;
 
@@ -571,13 +566,22 @@ WinDraw_Draw(void)
 	// 仮想パッド/ボタン描画
 
 	// アルファブレンドする(スケスケいやん)
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	microStart = clock();
 
-	draw_all_buttons(texture_coordinates, vertices, (GLfloat)WinUI_get_vkscale(), 0);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	SDL_GL_SwapWindow(sdl_window);
+
+	microEnd = clock();
+
+
+//	draw_all_buttons(texture_coordinates, vertices, (GLfloat)WinUI_get_vkscale(), 0);
 
 	//	glDeleteTextures(1, &texid);
 
-	SDL_GL_SwapWindow(sdl_window);
+	if (microEnd > (microLastSample + 0.5 * CLOCKS_PER_SEC)){
+		microLastSample = microEnd;
+			p6logd("Time in SDL_GL_SwapWindow: %f msecs.\n",  1000.0 * ((float)(microEnd - microStart ))  /  CLOCKS_PER_SEC  );
+	}
 
 #elif defined(PSP)
 	sceGuStart(GU_DIRECT, list);
