@@ -1046,6 +1046,8 @@ end_loop:
 	WinDraw_Cleanup();
 	WinDraw_CleanupScreen();
 
+	SDL_Quit();
+
 	SaveConfig();
 
 #if defined(PSP)

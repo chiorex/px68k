@@ -49,6 +49,8 @@
 #include "keyboard.h"
 #include "time.h"
 
+#include <pthread.h>
+
 #if 0
 #include "../icons/keropi.xpm"
 #endif
@@ -277,6 +279,7 @@ static void draw_kbd_to_tex(void);
 
 int WinDraw_Init(void)
 {
+	WinDraw_DrawLineCreateThread();
 	int i, j;
 
 #ifndef USE_OGLES11
@@ -1032,7 +1035,40 @@ INLINE void WinDraw_DrawPriLine(void)
 	WD_LOOP(0, TextDotX, _DPL_SUB);
 }
 
-void WinDraw_DrawLine(void)
+pthread_mutex_t drawline_mutex  = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  line_to_draw   	= PTHREAD_COND_INITIALIZER;
+pthread_t WinDraw_DrawLine_t;
+
+
+
+void * WinDraw_DrawLineThread(void )
+{
+	while (1) {
+		pthread_mutex_lock( &drawline_mutex );
+    pthread_cond_wait( &line_to_draw, &drawline_mutex );
+		WinDraw_DrawLineX();
+    pthread_mutex_unlock( &drawline_mutex );
+
+	}
+
+}
+
+void WinDraw_DrawLineCreateThread ()
+{
+		pthread_create( &WinDraw_DrawLine_t, NULL, &WinDraw_DrawLineThread, NULL);
+
+}
+ 
+void WinDraw_DrawLine(void) {
+	pthread_mutex_lock( &drawline_mutex );
+  pthread_cond_signal( &line_to_draw );
+  pthread_mutex_unlock( &drawline_mutex );
+
+
+}
+
+
+void WinDraw_DrawLineX(void)
 {
 	int opaq, ton=0, gon=0, bgon=0, tron=0, pron=0, tdrawed=0;
 
@@ -1701,18 +1737,6 @@ int WinDraw_MenuInit(void)
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 	menu_surface = SDL_CreateRGBSurface(SDL_SWSURFACE, 800, 600, 16, WinDraw_Pal16R, WinDraw_Pal16G, WinDraw_Pal16B, 0);
-#elif FAKESDL
-	menu_buffer = malloc(1024 * 1024 * 2);
-        if (menu_buffer == NULL) {
-                return FALSE;
-        }
-        set_sbp(menu_buffer);
-        set_mfs(24);
-	set_mcolor(0xffff);
-        set_mbcolor(0);
-
-	return TRUE;
-
 #else 
 	menu_surface = SDL_GetVideoSurface();
 #endif

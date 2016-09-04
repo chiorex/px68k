@@ -10,11 +10,15 @@ DEPEND	 = gccmakedep
 DEPEND_DEFINES =
 
 # for debug
-debug: CDEBUGFLAGS = -g -O0 -fno-strict-aliasing -W -pg
+debug: CDEBUGFLAGS = -g -O0 -fno-strict-aliasing -W 
 debug: CFLAGS += -DWIN68DEBUG
 debug: ASFLAGS += -g
 
-all:: CDEBUGFLAGS = -O2
+all:: CDEBUGFLAGS = -O2 
+
+ifdef PROFILE
+CFLAGS += -pg
+endif
 
 ifdef SDL2
 CFLAGS += -DUSE_OGLES11
@@ -89,9 +93,9 @@ ifdef CYCLONE
 CFLAGS += -DCYCLONE
 endif
 
-LDLIBS = -lm
+LDLIBS += -lm -lpthread 
 
-EXTRA_INCLUDES= -I./x11 -I./x68k -I./fmgen -I./win32api $(SDL_INCLUDE)
+EXTRA_INCLUDES= -I./x11 -I./x68k -I./fmgen -I./win32api $(SDL_INCLUDE) -I/opt/vc/include/
 
 CXXDEBUGFLAGS= $(CDEBUGFLAGS)
 
