@@ -47,9 +47,26 @@
 #include "tvram.h"
 #include "joystick.h"
 #include "keyboard.h"
-#include "time.h"
+#include <sys/time.h>
 
 #include <pthread.h>
+
+#ifdef VSYNC
+#include "bcm_host.h"
+pthread_mutex_t vsync_mutex	= PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  vsync_cond		= PTHREAD_COND_INITIALIZER;
+static DISPMANX_DISPLAY_HANDLE_T   display;
+unsigned long frames = 0;
+struct timeval vsyncStartEpoch, lastVsync;
+long int waitingForDrawLineThisFrame, waitingForDrawLine;
+
+#endif
+
+pthread_mutex_t drawline_mutex  = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  line_to_draw   	= PTHREAD_COND_INITIALIZER;
+pthread_t WinDraw_DrawLine_t;
+
+
 
 #if 0
 #include "../icons/keropi.xpm"
@@ -100,7 +117,45 @@ static GLuint texid[11];
 extern SDL_Window *sdl_window;
 #endif
 
-clock_t microStart, microEnd, microLastSample = 0;
+struct timeval microStart, microEnd, microLastSample;
+
+
+void Vsync_Callback(DISPMANX_UPDATE_HANDLE_T u, void* arg) 
+{
+	pthread_mutex_lock(&vsync_mutex);
+	pthread_cond_broadcast(&vsync_cond);
+	pthread_mutex_unlock(&vsync_mutex);
+	gettimeofday(&lastVsync, NULL);
+	++frames;
+	waitingForDrawLine = waitingForDrawLineThisFrame;
+	waitingForDrawLineThisFrame = 0.0;
+}
+
+void WinDraw_WaitForVSync() 
+{
+	pthread_mutex_lock(&vsync_mutex);
+	pthread_cond_wait(&vsync_cond, &vsync_mutex);
+	pthread_mutex_unlock(&vsync_mutex);
+}
+
+void Windraw_InitVsync()
+{
+	
+	bcm_host_init();
+  display = vc_dispmanx_display_open( 0 );
+
+  vc_dispmanx_vsync_callback(display, Vsync_Callback, NULL);
+
+	gettimeofday(&vsyncStartEpoch, NULL);
+  frames = 0;
+   
+}
+
+void WinDraw_CleanupVsync()
+{
+	vc_dispmanx_vsync_callback(display, NULL, NULL); // disable callback
+  vc_dispmanx_display_close( display );
+}
 
 void WinDraw_InitWindowSize(WORD width, WORD height)
 {
@@ -282,6 +337,10 @@ int WinDraw_Init(void)
 	WinDraw_DrawLineCreateThread();
 	int i, j;
 
+#ifdef VSYNC
+	Windraw_InitVsync();
+#endif
+
 #ifndef USE_OGLES11
 	SDL_Surface *sdl_surface;
 
@@ -429,6 +488,9 @@ int WinDraw_Init(void)
 void
 WinDraw_Cleanup(void)
 {
+	#ifdef VSYNC
+	WinDraw_CleanupVsync();
+	#endif
 }
 
 void
@@ -486,6 +548,8 @@ void draw_all_buttons(GLfloat *tex, GLfloat *ver, GLfloat scale, int is_menu)
 void FASTCALL
 WinDraw_Draw(void)
 {
+	struct timeval previousVsync, timediff;
+
 	SDL_Surface *sdl_surface;
 	static int oldtextx = -1, oldtexty = -1;
 
@@ -496,7 +560,7 @@ WinDraw_Draw(void)
 	if (oldtexty != TextDotY) {
 		oldtexty = TextDotY;
 		p6logd("TextDotY: %d\n", TextDotY);
-	}
+	}	
 
 #if defined(USE_OGLES11)
 	GLfloat texture_coordinates[8];
@@ -569,28 +633,47 @@ WinDraw_Draw(void)
 	// 仮想パッド/ボタン描画
 
 	// アルファブレンドする(スケスケいやん)
-	microStart = clock();
+	gettimeofday(&microStart, NULL);
+	previousVsync = lastVsync;
 
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 	SDL_GL_SwapWindow(sdl_window);
+	#ifdef VSYNC
+	WinDraw_WaitForVSync();
+	#endif
 
-	microEnd = clock();
-
+	gettimeofday(&microEnd, NULL);
 
 //	draw_all_buttons(texture_coordinates, vertices, (GLfloat)WinUI_get_vkscale(), 0);
 
 	//	glDeleteTextures(1, &texid);
 
-	if (microEnd > (microLastSample + 0.5 * CLOCKS_PER_SEC)){
+	timersub(&microEnd, &microLastSample, &timediff);
+
+	if (timediff.tv_sec >=1 ){
 		microLastSample = microEnd;
-			p6logd("Time in SDL_GL_SwapWindow: %f msecs.\n",  1000.0 * ((float)(microEnd - microStart ))  /  CLOCKS_PER_SEC  );
+		timersub(&microEnd, &microStart, &timediff);
+
+		p6logd("Time in SDL_GL_SwapWindow: %.1f msecs.\n",  1000.0 * timediff.tv_sec + timediff.tv_usec/1000.0 );
+	#ifdef VSYNC
+		timersub(&lastVsync, &previousVsync, &timediff);
+		p6logd("Vync offset: %.1f msecs.\n",  1000.0 * timediff.tv_sec + timediff.tv_usec/1000.0  );
+
+		timersub(&microEnd, &vsyncStartEpoch, &timediff);
+		p6logd("Vync Hz: %.1f (%lu frames)\n", (float)frames  / (timediff.tv_sec + timediff.tv_usec/1000000.0), frames );
+
+		p6logd("Wait in DrawLine: %.1fms\n", waitingForDrawLine /1000.0);
+
+	#endif
+
+
 	}
 
 #elif defined(PSP)
 	sceGuStart(GU_DIRECT, list);
 
 	sceGuClearColor(0);
-	sceGuClearDepth(0);
+	sceGuClearDepth(0); 
 	sceGuClear(GU_COLOR_BUFFER_BIT|GU_DEPTH_BUFFER_BIT);
 
 	// 左半分
@@ -1035,38 +1118,39 @@ INLINE void WinDraw_DrawPriLine(void)
 	WD_LOOP(0, TextDotX, _DPL_SUB);
 }
 
-pthread_mutex_t drawline_mutex  = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t  line_to_draw   	= PTHREAD_COND_INITIALIZER;
-pthread_t WinDraw_DrawLine_t;
 
-
-
-void * WinDraw_DrawLineThread(void )
+void * WinDraw_DrawLineThread(void *data)
 {
 	while (1) {
 		pthread_mutex_lock( &drawline_mutex );
     pthread_cond_wait( &line_to_draw, &drawline_mutex );
 		WinDraw_DrawLineX();
     pthread_mutex_unlock( &drawline_mutex );
-
 	}
 
 }
 
-void WinDraw_DrawLineCreateThread ()
+void WinDraw_DrawLineCreateThread (void)
 {
 		pthread_create( &WinDraw_DrawLine_t, NULL, &WinDraw_DrawLineThread, NULL);
 
 }
  
 void WinDraw_DrawLine(void) {
+	struct timeval start, end, diff;
+
+	gettimeofday(&start, NULL);
+
 	pthread_mutex_lock( &drawline_mutex );
   pthread_cond_signal( &line_to_draw );
   pthread_mutex_unlock( &drawline_mutex );
 
+  gettimeofday(&end, NULL);
 
+  timersub(&end, &start, &diff);
+
+  waitingForDrawLineThisFrame += diff.tv_usec; 
 }
-
 
 void WinDraw_DrawLineX(void)
 {

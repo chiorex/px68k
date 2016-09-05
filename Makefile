@@ -14,10 +14,15 @@ debug: CDEBUGFLAGS = -g -O0 -fno-strict-aliasing -W
 debug: CFLAGS += -DWIN68DEBUG
 debug: ASFLAGS += -g
 
-all:: CDEBUGFLAGS = -O2 
+all:: CDEBUGFLAGS = -Ofast
 
 ifdef PROFILE
-CFLAGS += -pg
+CFLAGS += -g
+CXXLDOPTIONS += -lprofiler -g
+endif
+
+ifdef VSYNC
+CFLAGS += -DVSYNC
 endif
 
 ifdef SDL2
@@ -79,6 +84,7 @@ endif
 SDL_INCLUDE=	`$(SDL_CONFIG) --cflags`
 ifdef SDL2
 SDL_LIB=	`$(SDL_CONFIG) --libs` -lSDL2_gfx -L/opt/vc/lib -lGLESv2
+EXTRA_INCLUDES += -I/opt/vc/include/
 else
 SDL_LIB=	`$(SDL_CONFIG) --libs` -lSDL_gfx
 endif
@@ -95,7 +101,11 @@ endif
 
 LDLIBS += -lm -lpthread 
 
-EXTRA_INCLUDES= -I./x11 -I./x68k -I./fmgen -I./win32api $(SDL_INCLUDE) -I/opt/vc/include/
+ifdef VSYNC
+LDLIBS += -lbcm_host
+endif
+
+EXTRA_INCLUDES += -I./x11 -I./x68k -I./fmgen -I./win32api $(SDL_INCLUDE) 
 
 CXXDEBUGFLAGS= $(CDEBUGFLAGS)
 

@@ -798,7 +798,6 @@ int main(int argc, char *argv[])
 	FDD_SetFD(1, Config.FDDImage[1], 0);
 
 	//SDL_StartTextInput();
-
 	while (1) {
 		// OPM_RomeoOut(Config.BufferSize * 5);
 		if (menu_mode == menu_out
@@ -1027,6 +1026,7 @@ int main(int argc, char *argv[])
 
 	}
 end_loop:
+
 	Memory_WriteB(0xe8e00d, 0x31);	// SRAM�񤭹��ߵ���
 	Memory_WriteD(0xed0040, Memory_ReadD(0xed0040)+1); // �ѻ���Ư����(min.)
 	Memory_WriteD(0xed0044, Memory_ReadD(0xed0044)+1); // �ѻ���ư����

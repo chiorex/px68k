@@ -160,8 +160,7 @@ int m68000_execute(int cycles)
 
 	cycleEpoch += (cycles - cyclesLeft);
 
-
-	if (cycleEpoch > (lastTraceCycleEpoch + 10000000) ) {
+	/*if (cycleEpoch > (lastTraceCycleEpoch + 10000000) ) {
 
 		tracing = 1;
 
@@ -195,11 +194,7 @@ int m68000_execute(int cycles)
 
 		lastTraceCycleEpoch = cycleEpoch;
 		lastTraceMicro = microCurrent;
-	}
-
-	if (cycleEpoch > 20000000) {
-//		exit(1);
-	}
+	}*/
 
 	return cyclesLeft;
 }
