@@ -28,7 +28,7 @@ extern int rfd_sock;
 extern	BYTE*	FONT;
 
 extern	WORD	VLINE_TOTAL;
-extern	DWORD	VLINE;
+//extern	DWORD	VLINE;
 extern	DWORD	vline;
 
 extern	char	winx68k_dir[MAX_PATH];

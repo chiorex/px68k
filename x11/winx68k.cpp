@@ -461,13 +461,13 @@ void WinX68k_Exec(void)
 			if ( (!DispFrame)&&(vline>=CRTC_VSTART)&&(vline<CRTC_VEND) ) {
 				if ( CRTC_VStep==1 ) {				// HighReso 256dot¡Ê2ÅÙÆÉ¤ß¡Ë
 					if ( vline%2 )
-						WinDraw_DrawLine();
+						WinDraw_DrawLine(VLINE);
 				} else if ( CRTC_VStep==4 ) {		// LowReso 512dot
-					WinDraw_DrawLine();				// 1ÁöººÀþ¤Ç2²óÉÁ¤¯¡Ê¥¤¥ó¥¿¡¼¥ì¡¼¥¹¡Ë
+					WinDraw_DrawLine(VLINE);				// 1ÁöººÀþ¤Ç2²óÉÁ¤¯¡Ê¥¤¥ó¥¿¡¼¥ì¡¼¥¹¡Ë
 					VLINE++;
-					WinDraw_DrawLine();
+					WinDraw_DrawLine(VLINE);
 				} else {							// High 512dot / Low 256dot
-					WinDraw_DrawLine();
+					WinDraw_DrawLine(VLINE);
 				}
 			}
 
@@ -690,7 +690,7 @@ int main(int argc, char *argv[])
 	SDL_GLContext glcontext = SDL_GL_CreateContext(sdl_window);
 	SDL_GL_SetSwapInterval(1); 
 
-        glClearColor( 0, 0, 0, 0 );
+    glClearColor( 0, 0, 0, 0 );
 
 	glEnable(GL_TEXTURE_2D);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

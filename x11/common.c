@@ -7,6 +7,7 @@
 #ifdef ANDROID
 #include <android/log.h>
 #endif
+#include <sys/time.h>
 
 //#include	"sstp.h"
 
@@ -31,16 +32,21 @@ void Error(const char* s)
 void p6logd(const char *fmt, ...)
 {
 	va_list args;
+	struct timeval when;
+
+	gettimeofday(&when, NULL);
 
 	va_start(args, fmt);
 	vsnprintf(p6l_buf, P6L_LEN, fmt, args);
 	va_end(args);
 
+
 #if defined(ANDROID)
 	__android_log_write(ANDROID_LOG_DEBUG, "Tag", p6l_buf);
 #elif defined(PSP)
-	printf("%s", p6l_buf);
+	printf("%d s %ld: %s", when.tv_sec, when.tv_usec, p6l_buf);
 #else
-	printf("%s", p6l_buf);
+	printf("%d s %ld: %s", when.tv_sec, when.tv_usec, p6l_buf);
 #endif
+	fflush(stdout);
 }

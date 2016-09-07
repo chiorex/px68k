@@ -35,10 +35,10 @@
 	BYTE	BGCHR8[8*8*256];
 	BYTE	BGCHR16[16*16*256];
 
-	WORD	BG_LineBuf[1600];
-	WORD	BG_PriBuf[1600];
+	__thread WORD	BG_LineBuf[1600];
+	__thread WORD	BG_PriBuf[1600];
 
-	DWORD	VLINEBG = 0;
+	__thread DWORD	VLINEBG = 0;
 
 
 // -----------------------------------------------------------------------
@@ -51,11 +51,18 @@ void BG_Init(void)
 	ZeroMemory(BG, 0x8000);
 	ZeroMemory(BGCHR8, 8*8*256);
 	ZeroMemory(BGCHR16, 16*16*256);
-	ZeroMemory(BG_LineBuf, 1600*2);
+	//ZeroMemory(BG_LineBuf, 1600*2);
 	for (i=0; i<0x12; i++)
 		BG_Write(0xeb0800+i, 0);
 	BG_CHREND = 0x8000;
 }
+
+void BG_InitThread(void)
+{
+		ZeroMemory(BG_LineBuf, 1600*2);
+
+}
+
 
 
 // -----------------------------------------------------------------------
@@ -94,84 +101,6 @@ void FASTCALL BG_Write(DWORD adr, BYTE data)
 		adr ^= 1;
 		if (Sprite_Regs[adr] != data)
 		{
-#ifdef USE_ASM
-			_asm
-			{
-				mov	ebx, adr
-				and	ebx, 3f8h
-				mov	bx, word ptr Sprite_Regs[ebx+2]
-				sub	bx, 16
-				add	ebx, BG_VLINE
-				sub	ebx, v
-				and	ebx, 3ffh
-				mov	al, 16
-			spsetdirtylp1:
-				mov	byte ptr TextDirtyLine[ebx], 1
-				inc	bx
-				and	bx, 3ffh
-				dec	al
-				jnz	spsetdirtylp1
-			}
-			Sprite_Regs[adr] = data;
-			_asm
-			{
-				mov	ebx, adr
-				and	ebx, 3f8h
-				mov	bx, word ptr Sprite_Regs[ebx+2]
-				sub	bx, 16
-				add	ebx, BG_VLINE
-				sub	ebx, v
-				and	ebx, 3ffh
-				mov	al, 16
-			spsetdirtylp2:
-				mov	byte ptr TextDirtyLine[ebx], 1
-				inc	bx
-				and	bx, 3ffh
-				dec	al
-				jnz	spsetdirtylp2
-			}
-#elif defined(USE_GAS) && defined(__i386__)
-			asm (
-				"mov	%0, %%ebx;"
-				"and	$0x3f8, %%ebx;"
-				"mov	Sprite_Regs + 2(%%ebx), %%bx;"
-				"sub	$16, %%bx;"
-				"add	(%1), %%ebx;"
-				"sub	%2, %%ebx;"
-				"and	$0x3ff, %%ebx;"
-				"mov	$16, %%al;"
-			"0:"
-				"movb	$1, TextDirtyLine(%%ebx);"
-				"inc	%%bx;"
-				"and	$0x3ff, %%bx;"
-				"dec	%%al;"
-				"jnz	0b;"
-			: /* output: nothing */
-			: "m" (adr), "g" (BG_VLINE), "m" (v)
-			: "ax", "bx", "memory");
-
-			Sprite_Regs[adr] = data;
-
-			asm (
-				"mov	%0, %%ebx;"
-				"and	$0x3f8, %%ebx;"
-				"mov	Sprite_Regs + 2(%%ebx), %%bx;"
-				"sub	$16, %%bx;"
-				"add	(%1), %%ebx;"
-				"sub	%2, %%ebx;"
-				"and	$0x3ff, %%ebx;"
-				"mov	$16, %%al;"
-			"0:"
-				"movb	$1, TextDirtyLine(%%ebx);"
-				"inc	%%bx;"
-				"and	$0x3ff, %%bx;"
-				"dec	%%al;"
-				"jnz	0b;"
-			: /* output: nothing */
-			: "m" (adr), "g" (BG_VLINE), "m" (v)
-			: "ax", "bx", "memory");
-#else /* !USE_ASM && !(USE_GAS && __i386__) */
-
 			WORD t0, t, *pw;
 
 			v = BG_VLINE - 16 - v;
@@ -197,7 +126,6 @@ void FASTCALL BG_Write(DWORD adr, BYTE data)
 				UPDATE_TDL(t);
 			}
 
-#endif /* USE_ASM */
 		}
 	}
 	else if ((adr>=0xeb0800)&&(adr<0xeb0812))

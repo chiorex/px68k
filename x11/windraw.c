@@ -50,6 +50,11 @@
 #include <sys/time.h>
 
 #include <pthread.h>
+#include <semaphore.h>
+
+void WinDraw_DrawLineX(void);
+
+__thread DWORD CURRENT_VLINE;
 
 #ifdef VSYNC
 #include "bcm_host.h"
@@ -57,16 +62,20 @@ pthread_mutex_t vsync_mutex	= PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  vsync_cond		= PTHREAD_COND_INITIALIZER;
 static DISPMANX_DISPLAY_HANDLE_T   display;
 unsigned long frames = 0;
-struct timeval vsyncStartEpoch, lastVsync;
+struct timeval vsyncStartEpoch, lastVsync, lastFrame;
 long int waitingForDrawLineThisFrame, waitingForDrawLine;
 
 #endif
 
+#define THREADS  3
+
 pthread_mutex_t drawline_mutex  = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  line_to_draw   	= PTHREAD_COND_INITIALIZER;
-pthread_t WinDraw_DrawLine_t;
+pthread_t WinDraw_DrawLine_t[THREADS];
+sem_t sem;
 
-
+//pthread_mutex_t vline_mutex  = PTHREAD_MUTEX_INITIALIZER; 
+DWORD __VLINE;
 
 #if 0
 #include "../icons/keropi.xpm"
@@ -155,6 +164,137 @@ void WinDraw_CleanupVsync()
 {
 	vc_dispmanx_vsync_callback(display, NULL, NULL); // disable callback
   vc_dispmanx_display_close( display );
+}
+
+void * WinDraw_DrawLineThread(void *data)
+{
+	int err;
+	int value;
+
+	pthread_t self;
+	self = pthread_self();
+
+	BG_InitThread();
+
+	while (1) {
+
+	 	// p6logd("t%ld BEGIN WinDraw_DrawLineThread\n", self);
+
+		pthread_mutex_lock( &drawline_mutex );
+
+		err= sem_post(&sem);
+
+		sem_getvalue(&sem, &value);
+		// p6logd("t done sem_post(), value now: %d\n", value );
+
+		if (err == -1) {
+			p6logd("Error on sem_post %d\n", errno);
+		}
+
+	    pthread_cond_wait( &line_to_draw, &drawline_mutex );
+
+	    CURRENT_VLINE = __VLINE; 
+
+	    pthread_mutex_unlock( &drawline_mutex );
+
+/*
+	   	pthread_mutex_lock( &vline_mutex );
+	    CURRENT_VLINE = __VLINE; 
+		pthread_mutex_unlock( &vline_mutex );
+		*/
+
+	 	// p6logd("t BEGIN WinDraw_DrawLineX\n");
+
+		WinDraw_DrawLineX();
+	 	// p6logd("t END WinDraw_DrawLineX\n");
+
+		// sem_getvalue(&sem, &value);
+		// p6logd("t about to do sem_post(), value now: %d\n", value );
+
+	 	// p6logd("t END WinDraw_DrawLineThread\n");
+
+	}
+
+}
+
+void WinDraw_DrawLineCreateThread (void)
+{
+	int i;
+	sem_init(&sem, 0, 0);
+	for (i = 0; i< THREADS; i++) {
+		pthread_create( &WinDraw_DrawLine_t[i], NULL, &WinDraw_DrawLineThread, NULL);
+	}
+		
+}
+
+void WinDraw_WaitForDrawLine() {
+	int threads;
+
+	while (sem_getvalue(&sem, &threads), threads < THREADS ) {usleep(1);}
+	return;
+}
+
+ 
+void WinDraw_DrawLine(DWORD _VLINE) {
+	
+	int err, value;
+	struct timeval start, end, diff;
+
+	gettimeofday(&start, NULL);
+
+	// p6logd("BEGIN WinDraw_DrawLine\n");
+
+
+	// sem_getvalue(&sem, &value);
+	// p6logd("about to do sem_wait(), value now: %d\n", value );
+
+
+	err = sem_wait(&sem);
+
+	// sem_getvalue(&sem, &value);
+	// p6logd("done sem_wait(), value now: %d\n", value );
+
+	if (err == -1) p6logd("Error on sem_wait %d\n", errno);
+
+/*
+	// p6logd(" >   pthread_mutex_lock(vline_mutex)\n" );
+	err = pthread_mutex_lock( &vline_mutex );
+	if (err == -1) p6logd("Error on pthread_mutex_lock vline_mutex %d\n", errno);
+	// p6logd(" <   thread_mutex_lock(vline_mutex)\n" );
+
+	__VLINE = _VLINE;
+
+	// p6logd(" >   pthread_mutex_unlock(vline_mutex)\n" );
+	err = pthread_mutex_unlock( &vline_mutex );
+	if (err == -1) p6logd("Error on pthread_mutex_lunock vline_mutex %d\n", errno);
+	// p6logd(" >   pthread_mutex_unlock(vline_mutex)\n" );
+
+	*/
+
+	// p6logd(" >>  pthread_mutex_lock(drawline_mutex)\n" );
+	err = pthread_mutex_lock( &drawline_mutex );
+	if (err == -1) p6logd("Error on pthread_mutex_lock drawline_mutex %d\n", errno);
+	// p6logd(" <<  pthread_mutex_lock(drawline_mutex)\n" );
+
+	__VLINE = _VLINE;
+
+	// p6logd(" >>> pthread_cond_signal(line_to_draw)\n" );
+	pthread_cond_signal( &line_to_draw );
+	// p6logd(" <<< pthread_cond_signal(line_to_draw)\n" );
+
+	// p6logd(" >>  pthread_mutex_unlock(drawline_mutex)\n" );
+	err = pthread_mutex_unlock( &drawline_mutex );
+	if (err == -1) p6logd("Error on pthread_mutex_unlock drawline_mutex %d\n", errno);
+	// p6logd(" <<  pthread_mutex_unlock(drawline_mutex)\n" );
+
+  	gettimeofday(&end, NULL);
+
+	timersub(&end, &start, &diff);
+
+ 	waitingForDrawLineThisFrame += diff.tv_usec; 
+
+	// p6logd("END WinDraw_DrawLine\n");
+
 }
 
 void WinDraw_InitWindowSize(WORD width, WORD height)
@@ -547,8 +687,11 @@ void draw_all_buttons(GLfloat *tex, GLfloat *ver, GLfloat scale, int is_menu)
 
 void FASTCALL
 WinDraw_Draw(void)
+
 {
 	struct timeval previousVsync, timediff;
+
+	WinDraw_WaitForDrawLine();
 
 	SDL_Surface *sdl_surface;
 	static int oldtextx = -1, oldtexty = -1;
@@ -637,9 +780,11 @@ WinDraw_Draw(void)
 	previousVsync = lastVsync;
 
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	//glFlush();
 	SDL_GL_SwapWindow(sdl_window);
+	//glFinish();
 	#ifdef VSYNC
-	WinDraw_WaitForVSync();
+	//WinDraw_WaitForVSync();
 	#endif
 
 	gettimeofday(&microEnd, NULL);
@@ -659,15 +804,22 @@ WinDraw_Draw(void)
 		timersub(&lastVsync, &previousVsync, &timediff);
 		p6logd("Vync offset: %.1f msecs.\n",  1000.0 * timediff.tv_sec + timediff.tv_usec/1000.0  );
 
+
+	#endif
+
+		timersub(&microEnd, &lastFrame, &timediff);
+		p6logd("Frame offset: %.1f msecs.\n",  1000.0 * timediff.tv_sec + timediff.tv_usec/1000.0  );
+
 		timersub(&microEnd, &vsyncStartEpoch, &timediff);
 		p6logd("Vync Hz: %.1f (%lu frames)\n", (float)frames  / (timediff.tv_sec + timediff.tv_usec/1000000.0), frames );
 
 		p6logd("Wait in DrawLine: %.1fms\n", waitingForDrawLine /1000.0);
 
-	#endif
-
 
 	}
+
+	lastFrame = microEnd;
+
 
 #elif defined(PSP)
 	sceGuStart(GU_DIRECT, list);
@@ -868,7 +1020,7 @@ WinDraw_Draw(void)
 {								\
 	if (TextDotX > 512) {					\
 		memcpy(&ScrBufL[adr], (src), 512 * 2);		\
-		adr = VLINE * 256;				\
+		adr = CURRENT_VLINE * 256;				\
 		memcpy(&ScrBufR[adr], (WORD *)(src) + 512, TextDotX * 2 - 512 * 2); \
 	} else {						\
 		memcpy(&ScrBufL[adr], (src), TextDotX * 2);	\
@@ -885,7 +1037,7 @@ WinDraw_Draw(void)
 		for (i = (start); i < 512 + (start); i++, adr++) {	\
 			sub(L);						\
 		}							\
-		adr = VLINE * 256;					\
+		adr = CURRENT_VLINE * 256;					\
 		for (i = 512 + (start); i < (end); i++, adr++) {	\
 			sub(R);						\
 		}							\
@@ -916,7 +1068,7 @@ INLINE void WinDraw_DrawGrpLine(int opaq)
 {
 #define _DGL_SUB(SUFFIX) WD_SUB(SUFFIX, Grp_LineBuf[i])
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	WORD w;
 	int i;
 
@@ -931,7 +1083,7 @@ INLINE void WinDraw_DrawGrpLineNonSP(int opaq)
 {
 #define _DGL_NSP_SUB(SUFFIX) WD_SUB(SUFFIX, Grp_LineBufSP2[i])
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	WORD w;
 	int i;
 
@@ -952,7 +1104,7 @@ INLINE void WinDraw_DrawTextLine(int opaq, int td)
 	}				\
 }	
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	WORD w;
 	int i;
 
@@ -1009,7 +1161,7 @@ INLINE void WinDraw_DrawTextLineTR(int opaq)
 	}						\
 }
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	DWORD v;
 	WORD w;
 	int i;
@@ -1031,7 +1183,7 @@ INLINE void WinDraw_DrawBGLine(int opaq, int td)
 	} \
 }
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	WORD w;
 	int i;
 
@@ -1042,7 +1194,7 @@ INLINE void WinDraw_DrawBGLine(int opaq, int td)
 		log_start = 1;
 	}
 	if (log_start) {
-		printf("opaq/td: %d/%d VLINE: %d, TextDotX: %d\n", opaq, td, VLINE, TextDotX);
+		printf("opaq/td: %d/%d CURRENT_VLINE: %d, TextDotX: %d\n", opaq, td, CURRENT_VLINE, TextDotX);
 	}
 #endif
 
@@ -1094,7 +1246,7 @@ INLINE void WinDraw_DrawBGLineTR(int opaq)
 	}						\
 }
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	DWORD v;
 	WORD w;
 	int i;
@@ -1111,53 +1263,19 @@ INLINE void WinDraw_DrawPriLine(void)
 {
 #define _DPL_SUB(SUFFIX) WD_SUB(SUFFIX, Grp_LineBufSP[i])
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	WORD w;
 	int i;
 
 	WD_LOOP(0, TextDotX, _DPL_SUB);
 }
 
-
-void * WinDraw_DrawLineThread(void *data)
-{
-	while (1) {
-		pthread_mutex_lock( &drawline_mutex );
-    pthread_cond_wait( &line_to_draw, &drawline_mutex );
-		WinDraw_DrawLineX();
-    pthread_mutex_unlock( &drawline_mutex );
-	}
-
-}
-
-void WinDraw_DrawLineCreateThread (void)
-{
-		pthread_create( &WinDraw_DrawLine_t, NULL, &WinDraw_DrawLineThread, NULL);
-
-}
- 
-void WinDraw_DrawLine(void) {
-	struct timeval start, end, diff;
-
-	gettimeofday(&start, NULL);
-
-	pthread_mutex_lock( &drawline_mutex );
-  pthread_cond_signal( &line_to_draw );
-  pthread_mutex_unlock( &drawline_mutex );
-
-  gettimeofday(&end, NULL);
-
-  timersub(&end, &start, &diff);
-
-  waitingForDrawLineThisFrame += diff.tv_usec; 
-}
-
 void WinDraw_DrawLineX(void)
 {
 	int opaq, ton=0, gon=0, bgon=0, tron=0, pron=0, tdrawed=0;
 
-	if (!TextDirtyLine[VLINE]) return;
-	TextDirtyLine[VLINE] = 0;
+	if (!TextDirtyLine[CURRENT_VLINE]) return;
+	TextDirtyLine[CURRENT_VLINE] = 0;
 	Draw_DrawFlag = 1;
 
 
@@ -1318,7 +1436,7 @@ void WinDraw_DrawLineX(void)
 			int s1, s2;
 			s1 = (((BG_Regs[0x11]  &4)?2:1)-((BG_Regs[0x11]  &16)?1:0));
 			s2 = (((CRTC_Regs[0x29]&4)?2:1)-((CRTC_Regs[0x29]&16)?1:0));
-			VLINEBG = VLINE;
+			VLINEBG = CURRENT_VLINE;
 			VLINEBG <<= s1;
 			VLINEBG >>= s2;
 			if ( !(BG_Regs[0x11]&16) ) VLINEBG -= ((BG_Regs[0x0f]>>s1)-(CRTC_Regs[0x0d]>>s2));
@@ -1333,7 +1451,7 @@ void WinDraw_DrawLineX(void)
 			int s1, s2;
 			s1 = (((BG_Regs[0x11]  &4)?2:1)-((BG_Regs[0x11]  &16)?1:0));
 			s2 = (((CRTC_Regs[0x29]&4)?2:1)-((CRTC_Regs[0x29]&16)?1:0));
-			VLINEBG = VLINE;
+			VLINEBG = CURRENT_VLINE;
 			VLINEBG <<= s1;
 			VLINEBG >>= s2;
 			if ( !(BG_Regs[0x11]&16) ) VLINEBG -= ((BG_Regs[0x0f]>>s1)-(CRTC_Regs[0x0d]>>s2));
@@ -1543,7 +1661,7 @@ void WinDraw_DrawLineX(void)
 		ScrBuf##SUFFIX[adr] = (w & Pal_HalfMask) >> 1;	\
 }
 
-			DWORD adr = VLINE*FULLSCREEN_WIDTH;
+			DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 			WORD w;
 			int i;
 
@@ -1553,11 +1671,11 @@ void WinDraw_DrawLineX(void)
 
 	if (opaq)
 	{
-		DWORD adr = VLINE*FULLSCREEN_WIDTH;
+		DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 #ifdef PSP
 		if (TextDotX > 512) {
 			bzero(&ScrBufL[adr], TextDotX * 2);
-			adr = VLINE * 256;
+			adr = CURRENT_VLINE * 256;
 			bzero(&ScrBufR[adr], (TextDotX - 512) * 2);
 		} else {
 			bzero(&ScrBufL[adr], TextDotX * 2);
