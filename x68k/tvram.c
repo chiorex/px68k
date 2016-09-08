@@ -19,7 +19,7 @@
 	BYTE	TextDrawPattern[2048*4];
 
 //	WORD	Text_LineBuf[1024];	// →BGのを使うように変更
-	BYTE	Text_TrFlag[1024];
+	 BYTE	Text_TrFlag[1024];
 
 INLINE void TVRAM_WriteByteMask(DWORD adr, BYTE data);
 
@@ -219,6 +219,9 @@ void FASTCALL Text_DrawLine(int opaq)
 	DWORD off = 16;
 	DWORD i;
 	BYTE t;
+
+	quit_if_main_thread();
+
 
 	y = TextScrollY + CURRENT_VLINE;
 	if ((CRTC_Regs[0x29] & 0x1c) == 0x1c)

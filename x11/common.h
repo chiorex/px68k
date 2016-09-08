@@ -45,6 +45,16 @@ typedef union {
 extern "C" {
 #endif
 
+#if MULTI_THREAD
+#define __THREAD __thread
+#else
+#define __THREAD
+#endif
+
+void init_quit_if_main_thread();
+void quit_if_main_thread();
+
+
 void Error(const char* s);
 void p6logd(const char *fmt, ...);
 

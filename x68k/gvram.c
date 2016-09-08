@@ -12,12 +12,26 @@
 #include	"m68000.h"
 #include	"memory.h"
 
+#include <syscall.h>
+
 BYTE	GVRAM[0x80000];
-__thread WORD	Grp_LineBuf[1024];
-__thread WORD	Grp_LineBufSP[1024];		// 特殊プライオリティ／半透明用バッファ
-__thread WORD	Grp_LineBufSP2[1024];		// 半透明ベースプレーン用バッファ（非半透明ビット格納）
+
+__THREAD WORD	Grp_LineBuf[1024];
+__THREAD WORD	Grp_LineBufSP[1024];		// 特殊プライオリティ／半透明用バッファ
+__THREAD WORD	Grp_LineBufSP2[1024];		// 半透明ベースプレーン用バッファ（非半透明ビット格納）
 
 WORD	Pal16Adr[256];			// 16bit color パレットアドレス計算用
+
+
+void debugThreadInfo(const char * where) {
+
+#ifdef MULTI_THREADx 
+	p6logd("In thread LWP: %d from %s\n", syscall(SYS_gettid), where);
+	p6logd("          LWP: %d Grp_LineBuf    at %08X \n", syscall(SYS_gettid), Grp_LineBuf    );
+	p6logd("          LWP: %d Grp_LineBufSP  at %08X \n", syscall(SYS_gettid), Grp_LineBufSP  );
+	p6logd("          LWP: %d Grp_LineBufSP2 at %08X \n", syscall(SYS_gettid), Grp_LineBufSP2 );
+#endif
+}
 
 // xxx: for little endian only
 #define GET_WORD_W8(src) (*(BYTE *)(src) | *((BYTE *)(src) + 1) << 8)
@@ -229,6 +243,9 @@ LABEL void Grp_DrawLine16(void)
 	DWORD i;
 	WORD v, v0;
 
+	quit_if_main_thread();
+	debugThreadInfo("Grp_DrawLine16");
+
 	y = GrphScrollY[0] + CURRENT_VLINE;
 	if ((CRTC_Regs[0x29] & 0x1c) == 0x1c)
 		y += CURRENT_VLINE;
@@ -281,6 +298,8 @@ LABEL void FASTCALL Grp_DrawLine8(int page, int opaq)
 	DWORD off;
 	DWORD i;
 	WORD v;
+
+	quit_if_main_thread();
 
 	page &= 1;
 
@@ -466,7 +485,7 @@ LABEL void FASTCALL Grp_DrawLine4(DWORD page, int opaq)
 			}
 		}
 	}
-}
+} 
 
 					// この画面モードは勘弁して下さい…
 void FASTCALL Grp_DrawLine4h(void)
@@ -530,6 +549,7 @@ void FASTCALL Grp_DrawLine16SP(void)
 
 	for (i = 0; i < TextDotX; ++i) {
 		v = (Pal_Regs[GVRAM[off+1]*2] << 8) | Pal_Regs[GVRAM[off]*2+1];
+	
 		if ((GVRAM[off] & 1) == 0) {
 			Grp_LineBufSP[i] = 0;
 			Grp_LineBufSP2[i] = Pal16[v & 0xfffe];
@@ -574,6 +594,11 @@ void FASTCALL Grp_DrawLine8SP(int page)
 
 	for (i = 0; i < TextDotX; ++i) {
 		v = (GVRAM[off] & 0x0f) | (GVRAM[off0] & 0xf0);
+
+		if (i == 0) {
+			debugThreadInfo("Grp_DrawLine8SP");
+		}
+
 		if ((v & 1) == 0) {
 			v &= 0xfe;
 			if (v != 0x00)

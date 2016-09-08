@@ -6,70 +6,46 @@ CXX	 = c++
 CXXLINK	 = $(CXX)
 RM	 = rm -f
 TAGS	 = etags
-DEPEND	 = gccmakedep
-DEPEND_DEFINES =
+
+DEPDIR := .d
+$(shell mkdir -p $(DEPDIR) >/dev/null)
+$(shell mkdir -p $(DEPDIR)/x68k >/dev/null)
+$(shell mkdir -p $(DEPDIR)/fmgen >/dev/null)
+$(shell mkdir -p $(DEPDIR)/win32api >/dev/null)
+$(shell mkdir -p $(DEPDIR)/x11 >/dev/null)
+$(shell mkdir -p $(DEPDIR)/m68000 >/dev/null)
+
+DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.Td
 
 # for debug
 debug: CDEBUGFLAGS = -g -O0 -fno-strict-aliasing -W 
 debug: CFLAGS += -DWIN68DEBUG
-debug: ASFLAGS += -g
+debug: ASFLAGS += -g 
 
-all:: CDEBUGFLAGS = -Ofast
+ifdef CYCLONE
+all:: CDEBUGFLAGS = -Ofast -g 
+else
+all:: CDEBUGFLAGS = -O2 -g 
+endif
 
 ifdef PROFILE
 CFLAGS += -g
 CXXLDOPTIONS += -lprofiler -g
 endif
 
+ifdef MULTI_THREAD
+CFLAGS += -DMULTI_THREAD
+endif
+
 ifdef VSYNC
 CFLAGS += -DVSYNC
+LDLIBS += -lbcm_host -L/opt/vc/lib
+EXTRA_INCLUDES += -I/opt/vc/include/
 endif
 
 ifdef SDL2
 CFLAGS += -DUSE_OGLES11
 endif
-
-#
-# enable SDL_gfx
-#
-#CFLAGS+= -DUSE_SDLGFX
-
-#
-# disable sound
-#
-#CDEBUGFLAGS+= -DNO_SOUND
-
-#
-# disable mercury unit
-#
-#CFLAGS+= -DNO_MERCURY
-
-#
-# enable RFMDRV
-#
-#CDEBUGFLAGS+= -DRFMDRV
-
-#
-# for Opt.
-#
-# CDEBUGFLAGS= -O3
-# CDEBUGFLAGS+= -funroll-loops
-# CDEBUGFLAGS+= -fomit-frame-pointer
-# CDEBUGFLAGS+= -ffast-math
-
-# CDEBUGFLAGS+= -march=pentium-m
-# CDEBUGFLAGS+= -msse -mfpmath=sse
-
-#
-# for DEBUG
-#
-# CDEBUGFLAGS= -O0
-# CDEBUGFLAGS+= -g
-# CDEBUGFLAGS+= -W -Wall -Wuninitialized
-# CDEBUGFLAGS+= -Wunused
-# CDEBUGFLAGS+= -Werror
-# CDEBUGFLAGS+= -DINLINE=
-# CDEBUGFLAGS+= -DUSE_GAS
 
 CFLAGS+=-DPX68K_VERSION=$(PX68K_VERSION)
 
@@ -84,13 +60,12 @@ endif
 SDL_INCLUDE=	`$(SDL_CONFIG) --cflags`
 ifdef SDL2
 SDL_LIB=	`$(SDL_CONFIG) --libs` -lSDL2_gfx -L/opt/vc/lib -lGLESv2
-EXTRA_INCLUDES += -I/opt/vc/include/
 else
 SDL_LIB=	`$(SDL_CONFIG) --libs` -lSDL_gfx
 endif
 
 ifeq ($(shell uname -m),armv7l)
-	MOPT= -mcpu=cortex-a53  -mfpu=neon-fp-armv8
+	MOPT= -mcpu=cortex-a53  -mfpu=neon-fp-armv8 -funsafe-math-optimizations
 else
 	MOPT= -m32
 endif
@@ -100,10 +75,6 @@ CFLAGS += -DCYCLONE
 endif
 
 LDLIBS += -lm -lpthread 
-
-ifdef VSYNC
-LDLIBS += -lbcm_host
-endif
 
 EXTRA_INCLUDES += -I./x11 -I./x68k -I./fmgen -I./win32api $(SDL_INCLUDE) 
 
@@ -122,15 +93,15 @@ else
 CPUOBJS= x68k/d68k.o m68000/m68000.o $(C68KOBJ)
 endif
 
-X68KOBJS= x68k/adpcm.o x68k/bg.o x68k/crtc.o x68k/dmac.o x68k/fdc.o x68k/fdd.o x68k/disk_d88.o x68k/disk_dim.o x68k/disk_xdf.o x68k/gvram.o x68k/ioc.o x68k/irqh.o x68k/mem_wrap.o x68k/mercury.o x68k/mfp.o x68k/palette.o x68k/midi.o x68k/pia.o x68k/rtc.o x68k/sasi.o x68k/scc.o x68k/scsi.o x68k/sram.o x68k/sysport.o x68k/tvram.o
+X68KOBJS= $(addprefix x68k/,adpcm.o bg.o crtc.o dmac.o fdc.o fdd.o disk_d88.o disk_dim.o disk_xdf.o gvram.o ioc.o irqh.o mem_wrap.o mercury.o mfp.o palette.o midi.o pia.o rtc.o sasi.o scc.o scsi.o sram.o sysport.o tvram.o)
 
-FMGENOBJS= fmgen/fmgen.o fmgen/fmg_wrap.o fmgen/file.o fmgen/fmtimer.o fmgen/opm.o fmgen/opna.o fmgen/psg.o
+FMGENOBJS= $(addprefix fmgen/, fmgen.o fmg_wrap.o file.o fmtimer.o opm.o opna.o psg.o)
 
-X11OBJS= x11/joystick.o x11/juliet.o x11/keyboard.o x11/mouse.o x11/prop.o x11/status.o x11/timer.o x11/dswin.o x11/windraw.o x11/winui.o x11/about.o x11/common.o
+X11OBJS= $(addprefix x11/,joystick.o juliet.o keyboard.o mouse.o prop.o status.o timer.o dswin.o windraw.o winui.o about.o common.o)
 
 X11CXXOBJS= x11/winx68k.o
 
-WIN32APIOBJS= win32api/dosio.o win32api/fake.o win32api/peace.o
+WIN32APIOBJS= $(addprefix win32api/, dosio.o fake.o peace.o)
 
 COBJS=		$(X68KOBJS) $(X11OBJS) $(WIN32APIOBJS) $(CPUOBJS)
 CXXOBJS=	$(FMGENOBJS) $(X11CXXOBJS)
@@ -140,16 +111,24 @@ CSRCS=		$(COBJS:.o=.c)
 CXXSRCS=	$(CXXOBJS:.o=.cpp)
 SRCS=		$(CSRCS) $(CXXSRCS)
 
-.SUFFIXES: .c .cpp .s
+COMPILE.c = $(CC) $(DEPFLAGS) $(CFLAGS) $(CPPFLAGS) -c
+COMPILE.cc = $(CXX) $(DEPFLAGS) $(CXXFLAGS) $(CPPFLAGS) -c
+POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
-.s.o:
-	$(AS) -o $@ $(ASFLAGS) $*.s
+%/%.o : %/%.c
+%/%.o : %/%.c $(DEPDIR)/%.d
+	$(COMPILE.c) $(OUTPUT_OPTION) $<
+	$(POSTCOMPILE)
 
-.c.o:
-	$(CC) -o $@ $(CFLAGS) -c $*.c
+%.o : %.cc
+%.o : %.cc $(DEPDIR)/%.d
+	$(COMPILE.cc) $(OUTPUT_OPTION) $<
+	$(POSTCOMPILE)
 
-.cpp.o:
-	$(CXX) -o $@ $(CXXFLAGS) -c $*.cpp
+%.o : %.cxx
+%.o : %.cxx $(DEPDIR)/%.d
+	$(COMPILE.cc) $(OUTPUT_OPTION) $<
+	$(POSTCOMPILE)
 
 all:: px68k
 debug:: px68k
@@ -158,14 +137,13 @@ px68k: $(OBJS)
 	$(RM) $@
 	$(CXXLINK) $(MOPT) -o $@ $(CXXLDOPTIONS) $(OBJS) $(SDL_LIB) $(LDLIBS)
 
-depend::
-	$(DEPEND) -- $(CXXFLAGS) $(DEPEND_DEFINES) -- $(SRCS)
-
 clean::
 	$(RM) px68k
 	$(RM) $(OBJS) $(C68KOBJ) $(CYCLONEOBJ)
 	$(RM) *.CKP *.ln *.BAK *.bak *.o core errs ,* *~ *.a .emacs_* tags TAGS make.log MakeOut   "#"*
 
-tags::
-	find . -name "*.h" -o -name "*.c" -o -name "*.cpp" | $(TAGS) -
+$(DEPDIR)/%.d : ;
 
+.PRECIOUS: $(DEPDIR)/%.d
+
+-include $(patsubst %,$(DEPDIR)/%.d,$(basename $(SRCS)))

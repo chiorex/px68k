@@ -51,28 +51,38 @@
 
 #include <pthread.h>
 #include <semaphore.h>
+#include <syscall.h>
+
+
 
 void WinDraw_DrawLineX(void);
 
-__thread DWORD CURRENT_VLINE;
+__THREAD DWORD CURRENT_VLINE;
 
 #ifdef VSYNC
+
 #include "bcm_host.h"
-pthread_mutex_t vsync_mutex	= PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t vsync_mutex		= PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  vsync_cond		= PTHREAD_COND_INITIALIZER;
 static DISPMANX_DISPLAY_HANDLE_T   display;
+
+#endif
+
 unsigned long frames = 0;
 struct timeval vsyncStartEpoch, lastVsync, lastFrame;
 long int waitingForDrawLineThisFrame, waitingForDrawLine;
 
-#endif
+#if MULTI_THREAD
 
-#define THREADS  3
+#define THREADS  1
 
 pthread_mutex_t drawline_mutex  = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  line_to_draw   	= PTHREAD_COND_INITIALIZER;
 pthread_t WinDraw_DrawLine_t[THREADS];
 sem_t sem;
+
+#endif
+
 
 //pthread_mutex_t vline_mutex  = PTHREAD_MUTEX_INITIALIZER; 
 DWORD __VLINE;
@@ -128,7 +138,7 @@ extern SDL_Window *sdl_window;
 
 struct timeval microStart, microEnd, microLastSample;
 
-
+#ifdef VSYNC
 void Vsync_Callback(DISPMANX_UPDATE_HANDLE_T u, void* arg) 
 {
 	pthread_mutex_lock(&vsync_mutex);
@@ -165,7 +175,9 @@ void WinDraw_CleanupVsync()
 	vc_dispmanx_vsync_callback(display, NULL, NULL); // disable callback
   vc_dispmanx_display_close( display );
 }
+#endif
 
+#ifdef MULTI_THREAD
 void * WinDraw_DrawLineThread(void *data)
 {
 	int err;
@@ -173,6 +185,8 @@ void * WinDraw_DrawLineThread(void *data)
 
 	pthread_t self;
 	self = pthread_self();
+
+	debugThreadInfo("WinDraw_DrawLineThread");
 
 	BG_InitThread();
 
@@ -216,26 +230,37 @@ void * WinDraw_DrawLineThread(void *data)
 	}
 
 }
+#endif
 
 void WinDraw_DrawLineCreateThread (void)
 {
+#ifdef MULTI_THREAD
 	int i;
+	init_quit_if_main_thread();
 	sem_init(&sem, 0, 0);
 	for (i = 0; i< THREADS; i++) {
 		pthread_create( &WinDraw_DrawLine_t[i], NULL, &WinDraw_DrawLineThread, NULL);
+		usleep(1000);
 	}
+#endif
 		
 }
 
 void WinDraw_WaitForDrawLine() {
+#ifdef MULTI_THREAD
+
 	int threads;
 
 	while (sem_getvalue(&sem, &threads), threads < THREADS ) {usleep(1);}
 	return;
+#endif
+
 }
 
  
 void WinDraw_DrawLine(DWORD _VLINE) {
+
+#ifdef MULTI_THREAD
 	
 	int err, value;
 	struct timeval start, end, diff;
@@ -294,6 +319,14 @@ void WinDraw_DrawLine(DWORD _VLINE) {
  	waitingForDrawLineThisFrame += diff.tv_usec; 
 
 	// p6logd("END WinDraw_DrawLine\n");
+
+#else
+
+
+	CURRENT_VLINE = _VLINE;
+	WinDraw_DrawLineX();
+
+#endif 
 
 }
 
@@ -984,6 +1017,11 @@ WinDraw_Draw(void)
 			}
 		}
 	}
+
+	#ifdef VSYNC
+	WinDraw_WaitForVSync();
+	#endif
+
 #endif
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)

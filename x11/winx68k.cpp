@@ -688,7 +688,7 @@ int main(int argc, char *argv[])
 
 #ifdef USE_OGLES11
 	SDL_GLContext glcontext = SDL_GL_CreateContext(sdl_window);
-	SDL_GL_SetSwapInterval(1); 
+	SDL_GL_SetSwapInterval(0); 
 
     glClearColor( 0, 0, 0, 0 );
 

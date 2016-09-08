@@ -16,7 +16,7 @@ extern	int	WindowX;
 extern	int	WindowY;
 extern	int	kbd_x, kbd_y, kbd_w, kbd_h;
 
-extern __thread DWORD CURRENT_VLINE;
+extern __THREAD DWORD CURRENT_VLINE;
 
 void WinDraw_InitWindowSize(WORD width, WORD height);
 void WinDraw_ChangeMode(int flag);

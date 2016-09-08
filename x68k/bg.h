@@ -15,10 +15,11 @@ extern	WORD	BG_BG0TOP;
 extern	WORD	BG_BG1TOP;
 extern	long	BG_HAdjust;
 extern	long	BG_VLINE;
-extern	__thread DWORD	VLINEBG;
 
 extern	BYTE	Sprite_DrawWork[1024*1024];
-extern	__thread WORD	BG_LineBuf[1600];
+
+extern	__THREAD DWORD	VLINEBG;
+extern	__THREAD WORD	BG_LineBuf[1600];
 
 void BG_Init(void);
 void BG_InitThread(void);
