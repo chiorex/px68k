@@ -17,7 +17,7 @@
 BYTE	GVRAM[0x80000];
 
 __THREAD WORD	Grp_LineBuf[1024];
-__THREAD WORD	Grp_LineBufSP[1024];		// 特殊プライオリティ／半透明用バッファ
+__THREAD WORD	__attribute__ ((aligned (16))) Grp_LineBufSP[1024];		// 特殊プライオリティ／半透明用バッファ
 __THREAD WORD	Grp_LineBufSP2[1024];		// 半透明ベースプレーン用バッファ（非半透明ビット格納）
 
 WORD	Pal16Adr[256];			// 16bit color パレットアドレス計算用
@@ -34,7 +34,8 @@ void debugThreadInfo(const char * where) {
 }
 
 // xxx: for little endian only
-#define GET_WORD_W8(src) (*(BYTE *)(src) | *((BYTE *)(src) + 1) << 8)
+//	#define GET_WORD_W8(src) (*(BYTE *)(src) | *((BYTE *)(src) + 1) << 8)
+#define GET_WORD_W8(src) (*src)
 
 
 // -----------------------------------------------------------------------
@@ -292,7 +293,8 @@ LABEL void Grp_DrawLine16(void)
 
 LABEL void FASTCALL Grp_DrawLine8(int page, int opaq)
 {
-	WORD *srcp, *destp;
+	WORD  *__restrict srcp;
+	WORD * __restrict destp;
 	DWORD x, x0;
 	DWORD y, y0;
 	DWORD off;
@@ -570,8 +572,9 @@ void FASTCALL Grp_DrawLine8SP(int page)
 	DWORD x, x0;
 	DWORD y, y0;
 	DWORD off, off0;
+	WORD woff, woff0;
 	DWORD i;
-	WORD v;
+	BYTE v;
 
 	page &= 1;
 
@@ -587,38 +590,25 @@ void FASTCALL Grp_DrawLine8SP(int page)
 	x = GrphScrollX[page * 2] & 0x1ff;
 	x0 = GrphScrollX[page * 2 + 1] & 0x1ff;
 
-	off = y + x * 2 + page;
-	off0 = y0 + x0 * 2 + page;
+//	off = y + x * 2 + page
+//	off0 = y0 + x0 * 2 + page;
+	off = y + x * 2;
+	off0 = y0 + x0 * 2 ;
 
 	x = (x ^ 0x1ff) + 1;
+	woff  = (off  & 0x3fe) >> 1;
+	woff0 = (off0 & 0x3fe) >> 1;
 
-	for (i = 0; i < TextDotX; ++i) {
-		v = (GVRAM[off] & 0x0f) | (GVRAM[off0] & 0xf0);
+	off  &= 0xfffffc00;
+	off0 &= 0xfffffc00;
+	off  |= page;
+	off0 |= page;
 
-		if (i == 0) {
-			debugThreadInfo("Grp_DrawLine8SP");
-		}
-
-		if ((v & 1) == 0) {
-			v &= 0xfe;
-			if (v != 0x00)
-				v = GrphPal[v];
-			Grp_LineBufSP[i] = 0;
-			Grp_LineBufSP2[i] = v;
-		} else {
-			v &= 0xfe;
-			if (v != 0x00)
-				v = GrphPal[v] | Ibit;
-			Grp_LineBufSP[i] = v;
-			Grp_LineBufSP2[i] = 0;
-		}
-
-		off += 2;
-		off0 += 2;
-		if ((off0 & 0x3fe) == 0)
-			off0 -= 0x400;
-		if (--x == 0)
-			off -= 0x400;
+	#pragma GCC ivdep
+	for (i = 0; i < TextDotX; ++i, woff++, woff0++) {
+		v = (GVRAM[off | ((woff << 1) & 0x3fe )] & 0x0f) | (GVRAM[off0 | ((woff0 << 1) & 0x3fe) ] & 0xf0);
+		Grp_LineBufSP[i]  = (-( v&1)) &  (GrphPal[v & 0xfe] | Ibit);
+		Grp_LineBufSP2[i] = (-(~v&1)) &   GrphPal[v];
 	}
 }
 

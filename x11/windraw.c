@@ -828,6 +828,7 @@ WinDraw_Draw(void)
 
 	timersub(&microEnd, &microLastSample, &timediff);
 
+/*
 	if (timediff.tv_sec >=1 ){
 		microLastSample = microEnd;
 		timersub(&microEnd, &microStart, &timediff);
@@ -836,9 +837,8 @@ WinDraw_Draw(void)
 	#ifdef VSYNC
 		timersub(&lastVsync, &previousVsync, &timediff);
 		p6logd("Vync offset: %.1f msecs.\n",  1000.0 * timediff.tv_sec + timediff.tv_usec/1000.0  );
-
-
 	#endif
+
 
 		timersub(&microEnd, &lastFrame, &timediff);
 		p6logd("Frame offset: %.1f msecs.\n",  1000.0 * timediff.tv_sec + timediff.tv_usec/1000.0  );
@@ -847,9 +847,8 @@ WinDraw_Draw(void)
 		p6logd("Vync Hz: %.1f (%lu frames)\n", (float)frames  / (timediff.tv_sec + timediff.tv_usec/1000000.0), frames );
 
 		p6logd("Wait in DrawLine: %.1fms\n", waitingForDrawLine /1000.0);
-
-
 	}
+	*/
 
 	lastFrame = microEnd;
 
@@ -1521,45 +1520,6 @@ void WinDraw_DrawLineX(void)
 
 	opaq = 1;
 
-
-#if 0
-					// Pri = 3（違反）に設定されている画面を表示
-		if ( ((VCReg1[0]&0x30)==0x30)&&(bgon) )
-		{
-			if ( ((VCReg2[0]&0x5d)==0x1d)&&((VCReg1[0]&0x03)!=0x03)&&(tron) )
-			{
-				if ( (VCReg1[0]&3)<((VCReg1[0]>>2)&3) )
-				{
-					WinDraw_DrawBGLineTR(opaq);
-					tdrawed = 1;
-					opaq = 0;
-				}
-			}
-			else
-			{
-				WinDraw_DrawBGLine(opaq, /*tdrawed*/0);
-				tdrawed = 1;
-				opaq = 0;
-			}
-		}
-		if ( ((VCReg1[0]&0x0c)==0x0c)&&(ton) )
-		{
-			if ( ((VCReg2[0]&0x5d)==0x1d)&&((VCReg1[0]&0x03)!=0x0c)&&(tron) )
-				WinDraw_DrawTextLineTR(opaq);
-			else
-				WinDraw_DrawTextLine(opaq, /*tdrawed*/((VCReg1[0]&0x30)==0x30));
-			opaq = 0;
-			tdrawed = 1;
-		}
-#endif
-					// Pri = 2 or 3（最下位）に設定されている画面を表示
-					// プライオリティが同じ場合は、GRP<SP<TEXT？（ドラスピ、桃伝、YsIII等）
-
-					// GrpよりTextが上にある場合にTextとの半透明を行うと、SPのプライオリティも
-					// Textに引きずられる？（つまり、Grpより下にあってもSPが表示される？）
-
-					// KnightArmsとかを見ると、半透明のベースプレーンは一番上になるみたい…。
-
 		if ( (VCReg1[0]&0x02) )
 		{
 			if (gon)
@@ -1692,20 +1652,41 @@ void WinDraw_DrawLineX(void)
 		else if ( ((VCReg2[0]&0x5d)==0x1c)&&(tron) )	// 半透明時に全てが透明なドットをハーフカラーで埋める
 		{						// （AQUALES）
 
+/*
 #define _DL_SUB(SUFFIX) \
 {								\
 	w = Grp_LineBufSP[i];					\
 	if (w != 0 && (ScrBuf##SUFFIX[adr] & 0xffff) == 0)	\
 		ScrBuf##SUFFIX[adr] = (w & Pal_HalfMask) >> 1;	\
 }
+*/
+		int adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
+		WORD w;
+		int i;
 
-			DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
-			WORD w;
-			int i;
+		// 0x000 -> -w 00000 
+	    //             n       n-1      -n       1-n
+	    // 0x0   -> 00000000 11111111 00000000 00000001
+		// 0x1   -> 00000001 00000000 11111111 00000000
+		// 0x2   -> 00000010 00000001 11111110 
+		// 0x3   -> 00000011 00000010 11111101  
+		// 0x4   -> 00000100 00000011 11111100 
 
-			WD_LOOP(0, TextDotX, _DL_SUB);
+		// n -> (n-1) ^ -n
+		// 0 -> 11111111 ^ 00000000
+		// 1 -> 
+		const WORD pp = Pal_HalfMask;
+
+		WORD * src = Grp_LineBufSP;
+		WORD * dst = &ScrBuf[adr];
+
+#pragma GCC ivdep
+		for (i = 0;  i <  TextDotX; i++) {
+			w = *src++;
+			//if (w != 0 && (!(*dst)) )
+				*dst++ |= (w & pp) >> 1;
 		}
-
+}
 
 	if (opaq)
 	{

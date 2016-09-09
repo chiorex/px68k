@@ -35,8 +35,8 @@
 	BYTE	BGCHR8[8*8*256];
 	BYTE	BGCHR16[16*16*256];
 
-	__THREAD WORD	BG_LineBuf[1600];
-	__THREAD WORD	BG_PriBuf[1600];
+	__THREAD WORD	__attribute__ ((aligned (16))) BG_LineBuf[1600];
+	__THREAD WORD	__attribute__ ((aligned (16))) BG_PriBuf[1600];
 
 	__THREAD DWORD	VLINEBG = 0;
 
@@ -481,15 +481,13 @@ BG_DrawLine(int opaq, int gd)
 
 
 	if (opaq) {
-		for (i = 16; i < TextDotX + 16; ++i) {
-			BG_LineBuf[i] = TextPal[0];
-			BG_PriBuf[i] = 0xffff;
-		}
-	} else {
-		for (i = 16; i < TextDotX + 16; ++i) {
-			BG_PriBuf[i] = 0xffff;
-		}
-	}
+	#if __SIZEOF_WCHAR_T__ == 4
+		wmemset(&BG_LineBuf[16], (TextPal[0] << 16) | TextPal[0], TextDotX/2);
+	#else
+		wmemset(&BG_LineBuf[16], TextPal[0], TextDotX);
+	#endif
+	} 
+	memset(&BG_PriBuf[16],  0xff, TextDotX*2);
 
 	func8 = (gd)? BG_DrawLineMcr8 : BG_DrawLineMcr8_ng;
 	func16 = (gd)? BG_DrawLineMcr16 : BG_DrawLineMcr16_ng;

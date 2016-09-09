@@ -23,9 +23,9 @@ debug: CFLAGS += -DWIN68DEBUG
 debug: ASFLAGS += -g 
 
 ifdef CYCLONE
-all:: CDEBUGFLAGS = -Ofast -g 
+all:: CDEBUGFLAGS = -O3 -g -ftree-vectorize
 else
-all:: CDEBUGFLAGS = -O2 -g 
+all:: CDEBUGFLAGS = -O2 -g -ftree-vectorize
 endif
 
 ifdef PROFILE
@@ -103,15 +103,22 @@ X11CXXOBJS= x11/winx68k.o
 
 WIN32APIOBJS= $(addprefix win32api/, dosio.o fake.o peace.o)
 
+CFLAGS-x68k/gvram.o += -ftree-vectorizer-verbose=7 -fopt-info-vec-all -Wa,-adhln=gvram.S 2>gvram.txt
+CFLAGS-x11/windraw.o += -ftree-vectorizer-verbose=7 -fopt-info-vec-all -Wa,-adhln=windraw.S 2>windraw.txt
+CFLAGS-x68k/bg.o += -ftree-vectorizer-verbose=7 -fopt-info-vec-all -Wa,-adhln=bg.S 2>bg.txt
+
+EXTRACFLAGS += $(CFLAGS-$@)
+CXXFLAGS += $(CXXFLAGS-$@)
+
 COBJS=		$(X68KOBJS) $(X11OBJS) $(WIN32APIOBJS) $(CPUOBJS)
-CXXOBJS=	$(FMGENOBJS) $(X11CXXOBJS)
+CXXOBJS=	$(FMGENOBJS) $(X11CXXOBJS) 
 OBJS=		$(COBJS) $(CXXOBJS)
 
 CSRCS=		$(COBJS:.o=.c)
 CXXSRCS=	$(CXXOBJS:.o=.cpp)
 SRCS=		$(CSRCS) $(CXXSRCS)
 
-COMPILE.c = $(CC) $(DEPFLAGS) $(CFLAGS) $(CPPFLAGS) -c
+COMPILE.c = $(CC) $(DEPFLAGS) $(CFLAGS) $(CPPFLAGS) -c $(EXTRACFLAGS)
 COMPILE.cc = $(CXX) $(DEPFLAGS) $(CXXFLAGS) $(CPPFLAGS) -c
 POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
