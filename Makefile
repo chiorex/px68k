@@ -24,6 +24,7 @@ debug: ASFLAGS += -g
 
 ifdef CYCLONE
 all:: CDEBUGFLAGS = -O3 -g -ftree-vectorize
+all:: CXXLDOPTIONS += -flto
 else
 all:: CDEBUGFLAGS = -O2 -g -ftree-vectorize
 endif
@@ -103,9 +104,9 @@ X11CXXOBJS= x11/winx68k.o
 
 WIN32APIOBJS= $(addprefix win32api/, dosio.o fake.o peace.o)
 
-CFLAGS-x68k/gvram.o += -ftree-vectorizer-verbose=7 -fopt-info-vec-all -Wa,-adhln=gvram.S 2>gvram.txt
-CFLAGS-x11/windraw.o += -ftree-vectorizer-verbose=7 -fopt-info-vec-all -Wa,-adhln=windraw.S 2>windraw.txt
-CFLAGS-x68k/bg.o += -ftree-vectorizer-verbose=7 -fopt-info-vec-all -Wa,-adhln=bg.S 2>bg.txt
+#CFLAGS-x68k/gvram.o += -ftree-vectorizer-verbose=7 -fopt-info-vec-all -Wa,-adhln=gvram.S 2>gvram.txt
+#CFLAGS-x11/windraw.o += -ftree-vectorizer-verbose=7 -fopt-info-vec-all -Wa,-adhln=windraw.S 2>windraw.txt
+#CFLAGS-x68k/bg.o += -ftree-vectorizer-verbose=7 -fopt-info-vec-all -Wa,-adhln=bg.S 2>bg.txt
 
 EXTRACFLAGS += $(CFLAGS-$@)
 CXXFLAGS += $(CXXFLAGS-$@)

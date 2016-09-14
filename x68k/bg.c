@@ -481,13 +481,23 @@ BG_DrawLine(int opaq, int gd)
 
 
 	if (opaq) {
-	#if __SIZEOF_WCHAR_T__ == 4
-		wmemset(&BG_LineBuf[16], (TextPal[0] << 16) | TextPal[0], TextDotX/2);
-	#else
-		wmemset(&BG_LineBuf[16], TextPal[0], TextDotX);
-	#endif
+
+		//wmemset(&BG_LineBuf[16], (TextPal[0] << 16) | TextPal[0], TextDotX/2);
+		WORD * p = &BG_LineBuf[16];
+		const WORD c = TextPal[0]; 
+		#pragma GCC ivdep
+		for (i = 0; i < TextDotX; i++){
+			*p++ = c;
+		}
 	} 
 	memset(&BG_PriBuf[16],  0xff, TextDotX*2);
+	/*WORD *p = &BG_PriBuf[16];
+	const WORD c = 0xffff; 
+
+	#pragma GCC ivdep
+	for (i = 0; i < TextDotX; i++){
+		*p++ = c;
+	}*/
 
 	func8 = (gd)? BG_DrawLineMcr8 : BG_DrawLineMcr8_ng;
 	func16 = (gd)? BG_DrawLineMcr16 : BG_DrawLineMcr16_ng;

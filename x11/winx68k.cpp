@@ -649,7 +649,6 @@ int main(int argc, char *argv[])
 #if !SDL_VERSION_ATLEAST(2, 0, 0)
 	SDL_WM_SetCaption(APPNAME" SDL", NULL);
 
-#ifndef FAKESDL
 #ifndef PSP
         if (SDL_SetVideoMode(FULLSCREEN_WIDTH, FULLSCREEN_HEIGHT, 16, SDL_SWSURFACE) == NULL) {
 #else
@@ -658,7 +657,6 @@ int main(int argc, char *argv[])
 		puts("SDL_SetVideoMode() failed");
 		return 1;
 	}
-#endif // FAKESDL
 
 #else
 #ifdef USE_OGLES11
@@ -680,13 +678,16 @@ int main(int argc, char *argv[])
 	sdl_window = SDL_CreateWindow(APPNAME" SDL", 0, 0, FULLSCREEN_WIDTH, FULLSCREEN_HEIGHT, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN);
 #endif
 #else
-	sdl_window = SDL_CreateWindow(APPNAME" SDL", 0, 0, FULLSCREEN_WIDTH, FULLSCREEN_HEIGHT, SDL_WINDOW_HIDDEN);
+	sdl_window = SDL_CreateWindow(APPNAME" SDL", 0, 0, FULLSCREEN_WIDTH, FULLSCREEN_HEIGHT, SDL_WINDOW_SHOWN);
 #endif
 	if (sdl_window == NULL) {
 		p6logd("sdl_window: %ld", sdl_window);
 	}
 
 #ifdef USE_OGLES11
+	sdl_dispmode.format = SDL_PIXELFORMAT_RGB565;
+
+	assert (0 == SDL_SetWindowDisplayMode(sdl_window, &sdl_dispmode));
 	SDL_GLContext glcontext = SDL_GL_CreateContext(sdl_window);
 	SDL_GL_SetSwapInterval(0); 
 

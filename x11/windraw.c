@@ -192,40 +192,19 @@ void * WinDraw_DrawLineThread(void *data)
 
 	while (1) {
 
-	 	// p6logd("t%ld BEGIN WinDraw_DrawLineThread\n", self);
-
 		pthread_mutex_lock( &drawline_mutex );
-
 		err= sem_post(&sem);
-
 		sem_getvalue(&sem, &value);
-		// p6logd("t done sem_post(), value now: %d\n", value );
 
 		if (err == -1) {
 			p6logd("Error on sem_post %d\n", errno);
 		}
 
 	    pthread_cond_wait( &line_to_draw, &drawline_mutex );
-
 	    CURRENT_VLINE = __VLINE; 
-
 	    pthread_mutex_unlock( &drawline_mutex );
 
-/*
-	   	pthread_mutex_lock( &vline_mutex );
-	    CURRENT_VLINE = __VLINE; 
-		pthread_mutex_unlock( &vline_mutex );
-		*/
-
-	 	// p6logd("t BEGIN WinDraw_DrawLineX\n");
-
 		WinDraw_DrawLineX();
-	 	// p6logd("t END WinDraw_DrawLineX\n");
-
-		// sem_getvalue(&sem, &value);
-		// p6logd("t about to do sem_post(), value now: %d\n", value );
-
-	 	// p6logd("t END WinDraw_DrawLineThread\n");
 
 	}
 
@@ -267,61 +246,25 @@ void WinDraw_DrawLine(DWORD _VLINE) {
 
 	gettimeofday(&start, NULL);
 
-	// p6logd("BEGIN WinDraw_DrawLine\n");
-
-
-	// sem_getvalue(&sem, &value);
-	// p6logd("about to do sem_wait(), value now: %d\n", value );
-
-
 	err = sem_wait(&sem);
-
-	// sem_getvalue(&sem, &value);
-	// p6logd("done sem_wait(), value now: %d\n", value );
-
 	if (err == -1) p6logd("Error on sem_wait %d\n", errno);
 
-/*
-	// p6logd(" >   pthread_mutex_lock(vline_mutex)\n" );
-	err = pthread_mutex_lock( &vline_mutex );
-	if (err == -1) p6logd("Error on pthread_mutex_lock vline_mutex %d\n", errno);
-	// p6logd(" <   thread_mutex_lock(vline_mutex)\n" );
-
-	__VLINE = _VLINE;
-
-	// p6logd(" >   pthread_mutex_unlock(vline_mutex)\n" );
-	err = pthread_mutex_unlock( &vline_mutex );
-	if (err == -1) p6logd("Error on pthread_mutex_lunock vline_mutex %d\n", errno);
-	// p6logd(" >   pthread_mutex_unlock(vline_mutex)\n" );
-
-	*/
-
-	// p6logd(" >>  pthread_mutex_lock(drawline_mutex)\n" );
 	err = pthread_mutex_lock( &drawline_mutex );
 	if (err == -1) p6logd("Error on pthread_mutex_lock drawline_mutex %d\n", errno);
-	// p6logd(" <<  pthread_mutex_lock(drawline_mutex)\n" );
 
 	__VLINE = _VLINE;
 
-	// p6logd(" >>> pthread_cond_signal(line_to_draw)\n" );
 	pthread_cond_signal( &line_to_draw );
-	// p6logd(" <<< pthread_cond_signal(line_to_draw)\n" );
 
-	// p6logd(" >>  pthread_mutex_unlock(drawline_mutex)\n" );
 	err = pthread_mutex_unlock( &drawline_mutex );
 	if (err == -1) p6logd("Error on pthread_mutex_unlock drawline_mutex %d\n", errno);
-	// p6logd(" <<  pthread_mutex_unlock(drawline_mutex)\n" );
 
   	gettimeofday(&end, NULL);
-
 	timersub(&end, &start, &diff);
 
  	waitingForDrawLineThisFrame += diff.tv_usec; 
 
-	// p6logd("END WinDraw_DrawLine\n");
-
 #else
-
 
 	CURRENT_VLINE = _VLINE;
 	WinDraw_DrawLineX();
@@ -739,6 +682,7 @@ WinDraw_Draw(void)
 	}	
 
 #if defined(USE_OGLES11)
+
 	GLfloat texture_coordinates[8];
 	GLfloat vertices[8];
 	GLfloat w;
@@ -827,6 +771,8 @@ WinDraw_Draw(void)
 	//	glDeleteTextures(1, &texid);
 
 	timersub(&microEnd, &microLastSample, &timediff);
+
+	
 
 /*
 	if (timediff.tv_sec >=1 ){
@@ -965,7 +911,7 @@ WinDraw_Draw(void)
 	int x, y, Bpp;
 //	WORD c, *p, *p2, dummy, *dst16;
 	WORD *p, *dst16;
-	DWORD *dst32, dat32;
+	DWORD *dst32, *dst32_w, dat32;
 
 	Bpp = sdl_surface->format->BytesPerPixel;
 	// 2倍に拡大する
@@ -974,19 +920,20 @@ WinDraw_Draw(void)
 			p = ScrBuf + 800 * y;
 			// surface->pixelsはvoid *
 			dst16 = sdl_surface->pixels + sdl_surface->w * Bpp * y * 2;
-			dst32 = (DWORD *)dst16;
-			for (x = 0; x < 256; x++) {
-				if  (Bpp == 4) {
+			dst32   = (DWORD *)dst16;
+			dst32_w = (DWORD *)dst32 + sdl_surface->w;
+			if  (Bpp == 4) {
+				#pragma GCC ivdep
+				for (x = 0; x < 256; x++) {
 					dat32 = (DWORD)(*p & 0xf800) << 8 | (*p & 0x07e0) << 5 | (*p & 0x001f) << 3;
 					*dst32++ = dat32;
-					*dst32 = dat32;
-					dst32 += sdl_surface->w;
-					*dst32-- = dat32;
-					*dst32 = dat32;
+					*dst32++ = dat32;
+					*dst32_w++ = dat32;
+					*dst32_w++ = dat32;
 					p++;
-					dst32 -= sdl_surface->w;
-					dst32 += 2;
-				} else if (Bpp == 2) {
+				} 
+			} else if (Bpp == 2) {
+				for (x = 0; x < 256; x++) {
 					*dst16++ = *p;
 					*dst16 = *p;
 					dst16 += sdl_surface->w;
@@ -995,11 +942,12 @@ WinDraw_Draw(void)
 					p++;
 					dst16 -= sdl_surface->w;
 					dst16 += 2;
-				} else {
+				} 
+			} else {
 					// xxx 未サポート
-				}
 			}
 		}
+		
 	} else {
 		for (y = 0; y < 512; y++) {
 			p = ScrBuf + 800 * y;
@@ -1680,7 +1628,7 @@ void WinDraw_DrawLineX(void)
 		WORD * src = Grp_LineBufSP;
 		WORD * dst = &ScrBuf[adr];
 
-#pragma GCC ivdep
+	    #pragma GCC ivdep
 		for (i = 0;  i <  TextDotX; i++) {
 			w = *src++;
 			//if (w != 0 && (!(*dst)) )
@@ -1700,7 +1648,14 @@ void WinDraw_DrawLineX(void)
 			bzero(&ScrBufL[adr], TextDotX * 2);
 		}
 #else
-		bzero(&ScrBuf[adr], TextDotX * 2);
+		//bzero(&ScrBuf[adr], TextDotX * 2);
+		WORD * dst = &ScrBuf[adr];
+		int i;
+
+		#pragma GCC ivdep
+		for (i = 0;  i <  TextDotX; i++) {
+			*dst++ = 0;
+		}
 #endif
 	}
 }
