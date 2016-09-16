@@ -458,22 +458,22 @@ skip_vpad:
 			ret0 ^= JOY_TRG2;
 		}
 		if (SDL_JoystickGetButton(sdl_joy, Config.HwJoyBtn[2])) {
-			ret1 ^= JOY_TRG3;
+			ret0 ^= (JOY_LEFT | JOY_RIGHT);	// [RUN]
 		}
 		if (SDL_JoystickGetButton(sdl_joy, Config.HwJoyBtn[3])) {
-			ret1 ^= JOY_TRG4;
+			ret0 ^= (JOY_UP | JOY_DOWN);	// [SELECT]
 		}
 		if (SDL_JoystickGetButton(sdl_joy, Config.HwJoyBtn[4])) {
-			ret1 ^= JOY_TRG5;
+			ret0 ^= JOY_TRG1;
 		}
 		if (SDL_JoystickGetButton(sdl_joy, Config.HwJoyBtn[5])) {
-			ret1 ^= JOY_TRG6;
+			ret0 ^= JOY_TRG2;
 		}
 		if (SDL_JoystickGetButton(sdl_joy, Config.HwJoyBtn[6])) {
-			ret1 ^= JOY_TRG7;
+			ret0 ^= JOY_TRG1;
 		}
 		if (SDL_JoystickGetButton(sdl_joy, Config.HwJoyBtn[7])) {
-			ret1 ^= JOY_TRG8;
+			ret0 ^= JOY_TRG2;
 		}
 	}
 

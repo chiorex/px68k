@@ -539,6 +539,14 @@ Keyboard_KeyDown(DWORD wp)
 			JoyKeyState |= JOY_RIGHT;
 		break;
 
+	case SDLK_a:
+		JoyKeyState |= (JOY_LEFT | JOY_RIGHT);	// [RUN]
+		break;
+
+	case SDLK_s:
+		JoyKeyState |= (JOY_UP | JOY_DOWN);		// [SELECT]
+		break;
+
 	case SDLK_z:
 		puts("key z");
 		if (Config.JoyKeyReverse)
@@ -609,6 +617,14 @@ Keyboard_KeyUp(DWORD wp)
 
 	case SDLK_RIGHT:
 		JoyKeyState &= ~JOY_RIGHT;
+		break;
+
+	case SDLK_a:
+		JoyKeyState &= ~(JOY_LEFT | JOY_RIGHT);	// [RUN]
+		break;
+
+	case SDLK_s:
+		JoyKeyState &= ~(JOY_UP | JOY_DOWN);	// [SELECT]
 		break;
 
 	case SDLK_z:
