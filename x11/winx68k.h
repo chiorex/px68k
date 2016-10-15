@@ -28,7 +28,7 @@ extern int rfd_sock;
 extern	BYTE*	FONT;
 
 extern	WORD	VLINE_TOTAL;
-extern	DWORD	VLINE;
+//extern	DWORD	VLINE;
 extern	DWORD	vline;
 
 extern	char	winx68k_dir[MAX_PATH];
@@ -38,7 +38,7 @@ extern	BYTE	FrameChanged;
 
 extern const BYTE PrgTitle[];
 
-#if defined(ANDROID) || TARGET_OS_IPHONE
+#if defined(ANDROID) || defined(TARGET_OS_IPHONE) || defined(USE_OGLES11)
 extern int realdisp_w, realdisp_h;
 #endif
 

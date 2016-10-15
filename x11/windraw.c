@@ -47,6 +47,45 @@
 #include "tvram.h"
 #include "joystick.h"
 #include "keyboard.h"
+#include <sys/time.h>
+
+#include <pthread.h>
+#include <semaphore.h>
+#include <syscall.h>
+
+
+
+void WinDraw_DrawLineX(void);
+
+__THREAD DWORD CURRENT_VLINE;
+
+#ifdef VSYNC
+
+#include "bcm_host.h"
+pthread_mutex_t vsync_mutex		= PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  vsync_cond		= PTHREAD_COND_INITIALIZER;
+static DISPMANX_DISPLAY_HANDLE_T   display;
+
+#endif
+
+unsigned long frames = 0;
+struct timeval vsyncStartEpoch, lastVsync, lastFrame;
+long int waitingForDrawLineThisFrame, waitingForDrawLine;
+
+#if MULTI_THREAD
+
+#define THREADS  1
+
+pthread_mutex_t drawline_mutex  = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  line_to_draw   	= PTHREAD_COND_INITIALIZER;
+pthread_t WinDraw_DrawLine_t[THREADS];
+sem_t sem;
+
+#endif
+
+
+//pthread_mutex_t vline_mutex  = PTHREAD_MUTEX_INITIALIZER; 
+DWORD __VLINE;
 
 #if 0
 #include "../icons/keropi.xpm"
@@ -60,7 +99,7 @@ WORD *ScrBufL = 0, *ScrBufR = 0;
 WORD *ScrBuf = 0;
 #endif
 
-#if defined(PSP) || defined(USE_OGLES11)
+#if defined(PSP) || defined(USE_OGLES11) 
 WORD *menu_buffer;
 WORD *kbd_buffer;
 #endif
@@ -96,6 +135,143 @@ static GLuint texid[11];
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 extern SDL_Window *sdl_window;
 #endif
+
+struct timeval microStart, microEnd, microLastSample;
+
+#ifdef VSYNC
+void Vsync_Callback(DISPMANX_UPDATE_HANDLE_T u, void* arg) 
+{
+	pthread_mutex_lock(&vsync_mutex);
+	pthread_cond_broadcast(&vsync_cond);
+	pthread_mutex_unlock(&vsync_mutex);
+	gettimeofday(&lastVsync, NULL);
+	++frames;
+	waitingForDrawLine = waitingForDrawLineThisFrame;
+	waitingForDrawLineThisFrame = 0.0;
+}
+
+void WinDraw_WaitForVSync() 
+{
+	pthread_mutex_lock(&vsync_mutex);
+	pthread_cond_wait(&vsync_cond, &vsync_mutex);
+	pthread_mutex_unlock(&vsync_mutex);
+}
+
+void Windraw_InitVsync()
+{
+	
+	bcm_host_init();
+  display = vc_dispmanx_display_open( 0 );
+
+  vc_dispmanx_vsync_callback(display, Vsync_Callback, NULL);
+
+	gettimeofday(&vsyncStartEpoch, NULL);
+  frames = 0;
+   
+}
+
+void WinDraw_CleanupVsync()
+{
+	vc_dispmanx_vsync_callback(display, NULL, NULL); // disable callback
+  vc_dispmanx_display_close( display );
+}
+#endif
+
+#ifdef MULTI_THREAD
+void * WinDraw_DrawLineThread(void *data)
+{
+	int err;
+	int value;
+
+	pthread_t self;
+	self = pthread_self();
+
+	debugThreadInfo("WinDraw_DrawLineThread");
+
+	BG_InitThread();
+
+	while (1) {
+
+		pthread_mutex_lock( &drawline_mutex );
+		err= sem_post(&sem);
+		sem_getvalue(&sem, &value);
+
+		if (err == -1) {
+			p6logd("Error on sem_post %d\n", errno);
+		}
+
+	    pthread_cond_wait( &line_to_draw, &drawline_mutex );
+	    CURRENT_VLINE = __VLINE; 
+	    pthread_mutex_unlock( &drawline_mutex );
+
+		WinDraw_DrawLineX();
+
+	}
+
+}
+#endif
+
+void WinDraw_DrawLineCreateThread (void)
+{
+#ifdef MULTI_THREAD
+	int i;
+	init_quit_if_main_thread();
+	sem_init(&sem, 0, 0);
+	for (i = 0; i< THREADS; i++) {
+		pthread_create( &WinDraw_DrawLine_t[i], NULL, &WinDraw_DrawLineThread, NULL);
+		usleep(1000);
+	}
+#endif
+		
+}
+
+void WinDraw_WaitForDrawLine() {
+#ifdef MULTI_THREAD
+
+	int threads;
+
+	while (sem_getvalue(&sem, &threads), threads < THREADS ) {usleep(1);}
+	return;
+#endif
+
+}
+
+ 
+void WinDraw_DrawLine(DWORD _VLINE) {
+
+#ifdef MULTI_THREAD
+	
+	int err, value;
+	struct timeval start, end, diff;
+
+	gettimeofday(&start, NULL);
+
+	err = sem_wait(&sem);
+	if (err == -1) p6logd("Error on sem_wait %d\n", errno);
+
+	err = pthread_mutex_lock( &drawline_mutex );
+	if (err == -1) p6logd("Error on pthread_mutex_lock drawline_mutex %d\n", errno);
+
+	__VLINE = _VLINE;
+
+	pthread_cond_signal( &line_to_draw );
+
+	err = pthread_mutex_unlock( &drawline_mutex );
+	if (err == -1) p6logd("Error on pthread_mutex_unlock drawline_mutex %d\n", errno);
+
+  	gettimeofday(&end, NULL);
+	timersub(&end, &start, &diff);
+
+ 	waitingForDrawLineThisFrame += diff.tv_usec; 
+
+#else
+
+	CURRENT_VLINE = _VLINE;
+	WinDraw_DrawLineX();
+
+#endif 
+
+}
 
 void WinDraw_InitWindowSize(WORD width, WORD height)
 {
@@ -274,7 +450,12 @@ static void draw_kbd_to_tex(void);
 
 int WinDraw_Init(void)
 {
+	WinDraw_DrawLineCreateThread();
 	int i, j;
+
+#ifdef VSYNC
+	Windraw_InitVsync();
+#endif
 
 #ifndef USE_OGLES11
 	SDL_Surface *sdl_surface;
@@ -423,6 +604,9 @@ int WinDraw_Init(void)
 void
 WinDraw_Cleanup(void)
 {
+	#ifdef VSYNC
+	WinDraw_CleanupVsync();
+	#endif
 }
 
 void
@@ -479,7 +663,12 @@ void draw_all_buttons(GLfloat *tex, GLfloat *ver, GLfloat scale, int is_menu)
 
 void FASTCALL
 WinDraw_Draw(void)
+
 {
+	struct timeval previousVsync, timediff;
+
+	WinDraw_WaitForDrawLine();
+
 	SDL_Surface *sdl_surface;
 	static int oldtextx = -1, oldtexty = -1;
 
@@ -490,9 +679,10 @@ WinDraw_Draw(void)
 	if (oldtexty != TextDotY) {
 		oldtexty = TextDotY;
 		p6logd("TextDotY: %d\n", TextDotY);
-	}
+	}	
 
 #if defined(USE_OGLES11)
+
 	GLfloat texture_coordinates[8];
 	GLfloat vertices[8];
 	GLfloat w;
@@ -563,19 +753,57 @@ WinDraw_Draw(void)
 	// 仮想パッド/ボタン描画
 
 	// アルファブレンドする(スケスケいやん)
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	gettimeofday(&microStart, NULL);
+	previousVsync = lastVsync;
 
-	draw_all_buttons(texture_coordinates, vertices, (GLfloat)WinUI_get_vkscale(), 0);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	//glFlush();
+	SDL_GL_SwapWindow(sdl_window);
+	//glFinish();
+	#ifdef VSYNC
+	//WinDraw_WaitForVSync();
+	#endif
+
+	gettimeofday(&microEnd, NULL);
+
+//	draw_all_buttons(texture_coordinates, vertices, (GLfloat)WinUI_get_vkscale(), 0);
 
 	//	glDeleteTextures(1, &texid);
 
-	SDL_GL_SwapWindow(sdl_window);
+	timersub(&microEnd, &microLastSample, &timediff);
+
+	
+
+/*
+	if (timediff.tv_sec >=1 ){
+		microLastSample = microEnd;
+		timersub(&microEnd, &microStart, &timediff);
+
+		p6logd("Time in SDL_GL_SwapWindow: %.1f msecs.\n",  1000.0 * timediff.tv_sec + timediff.tv_usec/1000.0 );
+	#ifdef VSYNC
+		timersub(&lastVsync, &previousVsync, &timediff);
+		p6logd("Vync offset: %.1f msecs.\n",  1000.0 * timediff.tv_sec + timediff.tv_usec/1000.0  );
+	#endif
+
+
+		timersub(&microEnd, &lastFrame, &timediff);
+		p6logd("Frame offset: %.1f msecs.\n",  1000.0 * timediff.tv_sec + timediff.tv_usec/1000.0  );
+
+		timersub(&microEnd, &vsyncStartEpoch, &timediff);
+		p6logd("Vync Hz: %.1f (%lu frames)\n", (float)frames  / (timediff.tv_sec + timediff.tv_usec/1000000.0), frames );
+
+		p6logd("Wait in DrawLine: %.1fms\n", waitingForDrawLine /1000.0);
+	}
+	*/
+
+	lastFrame = microEnd;
+
 
 #elif defined(PSP)
 	sceGuStart(GU_DIRECT, list);
 
 	sceGuClearColor(0);
-	sceGuClearDepth(0);
+	sceGuClearDepth(0); 
 	sceGuClear(GU_COLOR_BUFFER_BIT|GU_DEPTH_BUFFER_BIT);
 
 	// 左半分
@@ -683,7 +911,7 @@ WinDraw_Draw(void)
 	int x, y, Bpp;
 //	WORD c, *p, *p2, dummy, *dst16;
 	WORD *p, *dst16;
-	DWORD *dst32, dat32;
+	DWORD *dst32, *dst32_w, dat32;
 
 	Bpp = sdl_surface->format->BytesPerPixel;
 	// 2倍に拡大する
@@ -692,19 +920,20 @@ WinDraw_Draw(void)
 			p = ScrBuf + 800 * y;
 			// surface->pixelsはvoid *
 			dst16 = sdl_surface->pixels + sdl_surface->w * Bpp * y * 2;
-			dst32 = (DWORD *)dst16;
-			for (x = 0; x < 256; x++) {
-				if  (Bpp == 4) {
+			dst32   = (DWORD *)dst16;
+			dst32_w = (DWORD *)dst32 + sdl_surface->w;
+			if  (Bpp == 4) {
+				#pragma GCC ivdep
+				for (x = 0; x < 256; x++) {
 					dat32 = (DWORD)(*p & 0xf800) << 8 | (*p & 0x07e0) << 5 | (*p & 0x001f) << 3;
 					*dst32++ = dat32;
-					*dst32 = dat32;
-					dst32 += sdl_surface->w;
-					*dst32-- = dat32;
-					*dst32 = dat32;
+					*dst32++ = dat32;
+					*dst32_w++ = dat32;
+					*dst32_w++ = dat32;
 					p++;
-					dst32 -= sdl_surface->w;
-					dst32 += 2;
-				} else if (Bpp == 2) {
+				} 
+			} else if (Bpp == 2) {
+				for (x = 0; x < 256; x++) {
 					*dst16++ = *p;
 					*dst16 = *p;
 					dst16 += sdl_surface->w;
@@ -713,11 +942,12 @@ WinDraw_Draw(void)
 					p++;
 					dst16 -= sdl_surface->w;
 					dst16 += 2;
-				} else {
+				} 
+			} else {
 					// xxx 未サポート
-				}
 			}
 		}
+		
 	} else {
 		for (y = 0; y < 512; y++) {
 			p = ScrBuf + 800 * y;
@@ -734,6 +964,11 @@ WinDraw_Draw(void)
 			}
 		}
 	}
+
+	#ifdef VSYNC
+	WinDraw_WaitForVSync();
+	#endif
+
 #endif
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)
@@ -770,7 +1005,7 @@ WinDraw_Draw(void)
 {								\
 	if (TextDotX > 512) {					\
 		memcpy(&ScrBufL[adr], (src), 512 * 2);		\
-		adr = VLINE * 256;				\
+		adr = CURRENT_VLINE * 256;				\
 		memcpy(&ScrBufR[adr], (WORD *)(src) + 512, TextDotX * 2 - 512 * 2); \
 	} else {						\
 		memcpy(&ScrBufL[adr], (src), TextDotX * 2);	\
@@ -787,7 +1022,7 @@ WinDraw_Draw(void)
 		for (i = (start); i < 512 + (start); i++, adr++) {	\
 			sub(L);						\
 		}							\
-		adr = VLINE * 256;					\
+		adr = CURRENT_VLINE * 256;					\
 		for (i = 512 + (start); i < (end); i++, adr++) {	\
 			sub(R);						\
 		}							\
@@ -818,7 +1053,7 @@ INLINE void WinDraw_DrawGrpLine(int opaq)
 {
 #define _DGL_SUB(SUFFIX) WD_SUB(SUFFIX, Grp_LineBuf[i])
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	WORD w;
 	int i;
 
@@ -833,7 +1068,7 @@ INLINE void WinDraw_DrawGrpLineNonSP(int opaq)
 {
 #define _DGL_NSP_SUB(SUFFIX) WD_SUB(SUFFIX, Grp_LineBufSP2[i])
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	WORD w;
 	int i;
 
@@ -854,7 +1089,7 @@ INLINE void WinDraw_DrawTextLine(int opaq, int td)
 	}				\
 }	
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	WORD w;
 	int i;
 
@@ -911,7 +1146,7 @@ INLINE void WinDraw_DrawTextLineTR(int opaq)
 	}						\
 }
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	DWORD v;
 	WORD w;
 	int i;
@@ -933,7 +1168,7 @@ INLINE void WinDraw_DrawBGLine(int opaq, int td)
 	} \
 }
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	WORD w;
 	int i;
 
@@ -944,7 +1179,7 @@ INLINE void WinDraw_DrawBGLine(int opaq, int td)
 		log_start = 1;
 	}
 	if (log_start) {
-		printf("opaq/td: %d/%d VLINE: %d, TextDotX: %d\n", opaq, td, VLINE, TextDotX);
+		printf("opaq/td: %d/%d CURRENT_VLINE: %d, TextDotX: %d\n", opaq, td, CURRENT_VLINE, TextDotX);
 	}
 #endif
 
@@ -996,7 +1231,7 @@ INLINE void WinDraw_DrawBGLineTR(int opaq)
 	}						\
 }
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	DWORD v;
 	WORD w;
 	int i;
@@ -1013,19 +1248,19 @@ INLINE void WinDraw_DrawPriLine(void)
 {
 #define _DPL_SUB(SUFFIX) WD_SUB(SUFFIX, Grp_LineBufSP[i])
 
-	DWORD adr = VLINE*FULLSCREEN_WIDTH;
+	DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 	WORD w;
 	int i;
 
 	WD_LOOP(0, TextDotX, _DPL_SUB);
 }
 
-void WinDraw_DrawLine(void)
+void WinDraw_DrawLineX(void)
 {
 	int opaq, ton=0, gon=0, bgon=0, tron=0, pron=0, tdrawed=0;
 
-	if (!TextDirtyLine[VLINE]) return;
-	TextDirtyLine[VLINE] = 0;
+	if (!TextDirtyLine[CURRENT_VLINE]) return;
+	TextDirtyLine[CURRENT_VLINE] = 0;
 	Draw_DrawFlag = 1;
 
 
@@ -1186,7 +1421,7 @@ void WinDraw_DrawLine(void)
 			int s1, s2;
 			s1 = (((BG_Regs[0x11]  &4)?2:1)-((BG_Regs[0x11]  &16)?1:0));
 			s2 = (((CRTC_Regs[0x29]&4)?2:1)-((CRTC_Regs[0x29]&16)?1:0));
-			VLINEBG = VLINE;
+			VLINEBG = CURRENT_VLINE;
 			VLINEBG <<= s1;
 			VLINEBG >>= s2;
 			if ( !(BG_Regs[0x11]&16) ) VLINEBG -= ((BG_Regs[0x0f]>>s1)-(CRTC_Regs[0x0d]>>s2));
@@ -1201,7 +1436,7 @@ void WinDraw_DrawLine(void)
 			int s1, s2;
 			s1 = (((BG_Regs[0x11]  &4)?2:1)-((BG_Regs[0x11]  &16)?1:0));
 			s2 = (((CRTC_Regs[0x29]&4)?2:1)-((CRTC_Regs[0x29]&16)?1:0));
-			VLINEBG = VLINE;
+			VLINEBG = CURRENT_VLINE;
 			VLINEBG <<= s1;
 			VLINEBG >>= s2;
 			if ( !(BG_Regs[0x11]&16) ) VLINEBG -= ((BG_Regs[0x0f]>>s1)-(CRTC_Regs[0x0d]>>s2));
@@ -1232,45 +1467,6 @@ void WinDraw_DrawLine(void)
 
 
 	opaq = 1;
-
-
-#if 0
-					// Pri = 3（違反）に設定されている画面を表示
-		if ( ((VCReg1[0]&0x30)==0x30)&&(bgon) )
-		{
-			if ( ((VCReg2[0]&0x5d)==0x1d)&&((VCReg1[0]&0x03)!=0x03)&&(tron) )
-			{
-				if ( (VCReg1[0]&3)<((VCReg1[0]>>2)&3) )
-				{
-					WinDraw_DrawBGLineTR(opaq);
-					tdrawed = 1;
-					opaq = 0;
-				}
-			}
-			else
-			{
-				WinDraw_DrawBGLine(opaq, /*tdrawed*/0);
-				tdrawed = 1;
-				opaq = 0;
-			}
-		}
-		if ( ((VCReg1[0]&0x0c)==0x0c)&&(ton) )
-		{
-			if ( ((VCReg2[0]&0x5d)==0x1d)&&((VCReg1[0]&0x03)!=0x0c)&&(tron) )
-				WinDraw_DrawTextLineTR(opaq);
-			else
-				WinDraw_DrawTextLine(opaq, /*tdrawed*/((VCReg1[0]&0x30)==0x30));
-			opaq = 0;
-			tdrawed = 1;
-		}
-#endif
-					// Pri = 2 or 3（最下位）に設定されている画面を表示
-					// プライオリティが同じ場合は、GRP<SP<TEXT？（ドラスピ、桃伝、YsIII等）
-
-					// GrpよりTextが上にある場合にTextとの半透明を行うと、SPのプライオリティも
-					// Textに引きずられる？（つまり、Grpより下にあってもSPが表示される？）
-
-					// KnightArmsとかを見ると、半透明のベースプレーンは一番上になるみたい…。
 
 		if ( (VCReg1[0]&0x02) )
 		{
@@ -1404,34 +1600,62 @@ void WinDraw_DrawLine(void)
 		else if ( ((VCReg2[0]&0x5d)==0x1c)&&(tron) )	// 半透明時に全てが透明なドットをハーフカラーで埋める
 		{						// （AQUALES）
 
+/*
 #define _DL_SUB(SUFFIX) \
 {								\
 	w = Grp_LineBufSP[i];					\
 	if (w != 0 && (ScrBuf##SUFFIX[adr] & 0xffff) == 0)	\
 		ScrBuf##SUFFIX[adr] = (w & Pal_HalfMask) >> 1;	\
 }
+*/
+		int adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
+		WORD w;
+		int i;
 
-			DWORD adr = VLINE*FULLSCREEN_WIDTH;
-			WORD w;
-			int i;
+		// 0x000 -> -w 00000 
+	    //             n       n-1      -n       1-n
+	    // 0x0   -> 00000000 11111111 00000000 00000001
+		// 0x1   -> 00000001 00000000 11111111 00000000
+		// 0x2   -> 00000010 00000001 11111110 
+		// 0x3   -> 00000011 00000010 11111101  
+		// 0x4   -> 00000100 00000011 11111100 
 
-			WD_LOOP(0, TextDotX, _DL_SUB);
+		// n -> (n-1) ^ -n
+		// 0 -> 11111111 ^ 00000000
+		// 1 -> 
+		const WORD pp = Pal_HalfMask;
+
+		WORD * src = Grp_LineBufSP;
+		WORD * dst = &ScrBuf[adr];
+
+	    #pragma GCC ivdep
+		for (i = 0;  i <  TextDotX; i++) {
+			w = *src++;
+			//if (w != 0 && (!(*dst)) )
+				*dst++ |= (w & pp) >> 1;
 		}
-
+}
 
 	if (opaq)
 	{
-		DWORD adr = VLINE*FULLSCREEN_WIDTH;
+		DWORD adr = CURRENT_VLINE*FULLSCREEN_WIDTH;
 #ifdef PSP
 		if (TextDotX > 512) {
 			bzero(&ScrBufL[adr], TextDotX * 2);
-			adr = VLINE * 256;
+			adr = CURRENT_VLINE * 256;
 			bzero(&ScrBufR[adr], (TextDotX - 512) * 2);
 		} else {
 			bzero(&ScrBufL[adr], TextDotX * 2);
 		}
 #else
-		bzero(&ScrBuf[adr], TextDotX * 2);
+		//bzero(&ScrBuf[adr], TextDotX * 2);
+		WORD * dst = &ScrBuf[adr];
+		int i;
+
+		#pragma GCC ivdep
+		for (i = 0;  i <  TextDotX; i++) {
+			*dst++ = 0;
+		}
 #endif
 	}
 }
@@ -1689,7 +1913,7 @@ int WinDraw_MenuInit(void)
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 	menu_surface = SDL_CreateRGBSurface(SDL_SWSURFACE, 800, 600, 16, WinDraw_Pal16R, WinDraw_Pal16G, WinDraw_Pal16B, 0);
-#else
+#else 
 	menu_surface = SDL_GetVideoSurface();
 #endif
 

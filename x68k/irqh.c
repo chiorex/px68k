@@ -6,8 +6,12 @@
 #include "../m68000/m68000.h"
 #include "irqh.h"
 
-	BYTE	IRQH_IRQ[8];
-	void	*IRQH_CallBack[8];
+extern int m68000_ICountBk;
+extern int ICount;
+extern int * C68KICount;
+
+BYTE	IRQH_IRQ[8];
+void	*IRQH_CallBack[8];
 
 // -----------------------------------------------------------------------
 //   初期化
@@ -34,18 +38,19 @@ DWORD FASTCALL IRQH_DefaultVector(BYTE irq)
 // -----------------------------------------------------------------------
 void IRQH_IRQCallBack(BYTE irq)
 {
+	//p6logd("In IRQCallback: %d\n", irq);
 	int i;
 	IRQH_IRQ[irq] = 0;
-	C68k_Set_IRQ(&C68K, 0, 0);
+	m68000_reset_irq_line(irq);
 	for (i=7; i>0; i--)
 	{
 		if (IRQH_IRQ[i])
 		{
-			C68k_Set_IRQ_Callback(&C68K, IRQH_CallBack[i]);
-			C68k_Set_IRQ(&C68K, i, HOLD_LINE); // xxx 
-			if ( C68K.ICount) {					// 多重割り込み時（CARAT）
-				m68000_ICountBk += C68K.ICount;		// 強制的に割り込みチェックをさせる
-				C68K.ICount = 0;				// 苦肉の策 ^^;
+			m68000_set_irq_callback(IRQH_CallBack[i]);
+			m68000_set_irq_line(i); // xxx 
+			if ( *C68KICount) {					// 多重割り込み時（CARAT）
+				m68000_ICountBk += *C68KICount;		// 強制的に割り込みチェックをさせる
+				*C68KICount = 0;				// 苦肉の策 ^^;
 			}
 			break;
 		}
@@ -68,11 +73,11 @@ void IRQH_Int(BYTE irq, void* handler)
 	{
 		if (IRQH_IRQ[i])
 		{
-                        C68k_Set_IRQ_Callback(&C68K, IRQH_CallBack[i]);
-                        C68k_Set_IRQ(&C68K, i, HOLD_LINE); //xxx
-			if ( C68K.ICount ) {					// 多重割り込み時（CARAT）
-				m68000_ICountBk += C68K.ICount;		// 強制的に割り込みチェックをさせる
-				C68K.ICount = 0;				// 苦肉の策 ^^;
+            m68000_set_irq_callback(IRQH_CallBack[i]);
+            m68000_set_irq_line(i); //xxx
+			if ( *C68KICount ) {					// 多重割り込み時（CARAT）
+				m68000_ICountBk += *C68KICount;		// 強制的に割り込みチェックをさせる
+				*C68KICount = 0;				// 苦肉の策 ^^;
 			}
 			return;
 		}

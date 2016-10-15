@@ -35,10 +35,10 @@
 	BYTE	BGCHR8[8*8*256];
 	BYTE	BGCHR16[16*16*256];
 
-	WORD	BG_LineBuf[1600];
-	WORD	BG_PriBuf[1600];
+	__THREAD WORD	__attribute__ ((aligned (16))) BG_LineBuf[1600];
+	__THREAD WORD	__attribute__ ((aligned (16))) BG_PriBuf[1600];
 
-	DWORD	VLINEBG = 0;
+	__THREAD DWORD	VLINEBG = 0;
 
 
 // -----------------------------------------------------------------------
@@ -51,11 +51,18 @@ void BG_Init(void)
 	ZeroMemory(BG, 0x8000);
 	ZeroMemory(BGCHR8, 8*8*256);
 	ZeroMemory(BGCHR16, 16*16*256);
-	ZeroMemory(BG_LineBuf, 1600*2);
+	//ZeroMemory(BG_LineBuf, 1600*2);
 	for (i=0; i<0x12; i++)
 		BG_Write(0xeb0800+i, 0);
 	BG_CHREND = 0x8000;
 }
+
+void BG_InitThread(void)
+{
+		ZeroMemory(BG_LineBuf, 1600*2);
+
+}
+
 
 
 // -----------------------------------------------------------------------
@@ -94,84 +101,6 @@ void FASTCALL BG_Write(DWORD adr, BYTE data)
 		adr ^= 1;
 		if (Sprite_Regs[adr] != data)
 		{
-#ifdef USE_ASM
-			_asm
-			{
-				mov	ebx, adr
-				and	ebx, 3f8h
-				mov	bx, word ptr Sprite_Regs[ebx+2]
-				sub	bx, 16
-				add	ebx, BG_VLINE
-				sub	ebx, v
-				and	ebx, 3ffh
-				mov	al, 16
-			spsetdirtylp1:
-				mov	byte ptr TextDirtyLine[ebx], 1
-				inc	bx
-				and	bx, 3ffh
-				dec	al
-				jnz	spsetdirtylp1
-			}
-			Sprite_Regs[adr] = data;
-			_asm
-			{
-				mov	ebx, adr
-				and	ebx, 3f8h
-				mov	bx, word ptr Sprite_Regs[ebx+2]
-				sub	bx, 16
-				add	ebx, BG_VLINE
-				sub	ebx, v
-				and	ebx, 3ffh
-				mov	al, 16
-			spsetdirtylp2:
-				mov	byte ptr TextDirtyLine[ebx], 1
-				inc	bx
-				and	bx, 3ffh
-				dec	al
-				jnz	spsetdirtylp2
-			}
-#elif defined(USE_GAS) && defined(__i386__)
-			asm (
-				"mov	%0, %%ebx;"
-				"and	$0x3f8, %%ebx;"
-				"mov	Sprite_Regs + 2(%%ebx), %%bx;"
-				"sub	$16, %%bx;"
-				"add	(%1), %%ebx;"
-				"sub	%2, %%ebx;"
-				"and	$0x3ff, %%ebx;"
-				"mov	$16, %%al;"
-			"0:"
-				"movb	$1, TextDirtyLine(%%ebx);"
-				"inc	%%bx;"
-				"and	$0x3ff, %%bx;"
-				"dec	%%al;"
-				"jnz	0b;"
-			: /* output: nothing */
-			: "m" (adr), "g" (BG_VLINE), "m" (v)
-			: "ax", "bx", "memory");
-
-			Sprite_Regs[adr] = data;
-
-			asm (
-				"mov	%0, %%ebx;"
-				"and	$0x3f8, %%ebx;"
-				"mov	Sprite_Regs + 2(%%ebx), %%bx;"
-				"sub	$16, %%bx;"
-				"add	(%1), %%ebx;"
-				"sub	%2, %%ebx;"
-				"and	$0x3ff, %%ebx;"
-				"mov	$16, %%al;"
-			"0:"
-				"movb	$1, TextDirtyLine(%%ebx);"
-				"inc	%%bx;"
-				"and	$0x3ff, %%bx;"
-				"dec	%%al;"
-				"jnz	0b;"
-			: /* output: nothing */
-			: "m" (adr), "g" (BG_VLINE), "m" (v)
-			: "ax", "bx", "memory");
-#else /* !USE_ASM && !(USE_GAS && __i386__) */
-
 			WORD t0, t, *pw;
 
 			v = BG_VLINE - 16 - v;
@@ -197,7 +126,6 @@ void FASTCALL BG_Write(DWORD adr, BYTE data)
 				UPDATE_TDL(t);
 			}
 
-#endif /* USE_ASM */
 		}
 	}
 	else if ((adr>=0xeb0800)&&(adr<0xeb0812))
@@ -335,123 +263,6 @@ void FASTCALL BG_Write(DWORD adr, BYTE data)
 	}
 }
 
-#ifndef USE_GAS
-//#define USE_GAS
-#endif
-
-// -----------------------------------------------------------------------
-//   1ライン分の描画
-// -----------------------------------------------------------------------
-#ifdef USE_ASM
-#include	"bg.x86"
-LABEL void FASTCALL BG_DrawLine(int opaq, int gd) {
-	__asm {
-			pushf
-			push	ebx
-			push	esi
-			push	edi
-			push	edx
-			push	ebp
-
-			//xor	eax, eax
-			mov	ax, TextPal[0]
-			shl	eax, 16
-			mov	ax, TextPal[0]
-			mov	ebx, 0xffffffff
-			mov	edi, 16*2
-			or	ecx, ecx			// ecx = opaq
-			jz	noclrloop
-			mov	ecx, TextDotX
-			shr	ecx, 1
-		BGLineClr_lp:
-			mov	dword ptr BG_LineBuf[edi], eax
-			mov	dword ptr BG_PriBuf[edi], ebx	// SP間のプライオリティ情報初期化
-			add	edi, 4
-			loop	BGLineClr_lp
-			jmp	bgclrloopend
-
-		noclrloop:
-			mov	ecx, TextDotX
-			shr	ecx, 1
-		BGLineClr_lp2:
-			mov	dword ptr BG_PriBuf[edi], ebx	// SP間のプライオリティ情報初期化
-			add	edi, 4
-			loop	BGLineClr_lp2
-
-		bgclrloopend:
-			or	edx, edx			// edx = gd
-			je	BG_NOGRP
-
-			cmp	BG_CHRSIZE, 8
-			jne	BG16
-
-			Sprite_DrawLineMcr(81, 1)
-;			test	BG_Regs[9], 8
-;			je	BG8_1skiped
-;			BG_DrawLineMcr8(1, BG_BG1TOP, BG1ScrollX, BG1ScrollY)
-;		BG8_1skiped:
-			Sprite_DrawLineMcr(82, 2)
-			test	BG_Regs[9], 1
-			je	BG_0skiped
-			BG_DrawLineMcr8(0, BG_BG0TOP, BG0ScrollX, BG0ScrollY)
-			jmp	BG_0skiped
-
-		BG16:
-			Sprite_DrawLineMcr(161, 1)
-;			test	BG_Regs[9], 8
-;			je	BG16_1skiped
-;			BG_DrawLineMcr16(1, BG_BG1TOP, BG1ScrollX, BG1ScrollY)
-;		BG16_1skiped:
-			Sprite_DrawLineMcr(162, 2)
-			test	BG_Regs[9], 1
-			je	BG_0skiped
-			BG_DrawLineMcr16(0, BG_BG0TOP, BG0ScrollX, BG0ScrollY)
-			jmp	BG_0skiped
-
-		BG_NOGRP:
-			cmp	BG_CHRSIZE, 8
-			jne	BG16_ng
-
-			Sprite_DrawLineMcr(ng81, 1)
-			test	BG_Regs[9], 8
-			je	BG8_ng_1skiped
-			BG_DrawLineMcr8_ng(1, BG_BG1TOP, BG1ScrollX, BG1ScrollY)
-		BG8_ng_1skiped:
-			Sprite_DrawLineMcr(ng82, 2)
-			test	BG_Regs[9], 1
-			je	BG_0skiped
-			BG_DrawLineMcr8_ng(0, BG_BG0TOP, BG0ScrollX, BG0ScrollY)
-			jmp	BG_0skiped
-
-		BG16_ng:
-			Sprite_DrawLineMcr(ng161, 1)
-			test	BG_Regs[9], 8
-			je	BG16_ng_1skiped
-			BG_DrawLineMcr16_ng(1, BG_BG1TOP, BG1ScrollX, BG1ScrollY)
-		BG16_ng_1skiped:
-			Sprite_DrawLineMcr(ng162, 2)
-			test	BG_Regs[9], 1
-			je	BG_0skiped
-			BG_DrawLineMcr16_ng(0, BG_BG0TOP, BG0ScrollX, BG0ScrollY)
-		BG_0skiped:
-			Sprite_DrawLineMcr(163, 3)
-			pop	ebp
-			pop	edx
-			pop	edi
-			pop	esi
-			pop	ebx
-			popf
-			ret
-	}
-}
-#elif defined(USE_GAS) && defined(__i386__)
-#if 0
-LABEL void FASTCALL BG_DrawLine(int opaq, int gd) {
-	extern LABEL void FASTCALL __BG_DrawLine(int opaq, int gd);
-	__BG_DrawLine(opaq, gd);
-}
-#endif
-#else /* !USE_ASM && !(USE_GAS && __i386__) */
 struct SPRITECTRLTBL {
 	WORD	sprite_posx;
 	WORD	sprite_posy;
@@ -468,6 +279,9 @@ Sprite_DrawLineMcr(int pri)
 	DWORD y;
 	DWORD t;
 	int n;
+
+	quit_if_main_thread();
+
 
 	for (n = 127; n >= 0; --n) {
 		if ((sct[n].sprite_ply & 3) == pri) {
@@ -555,6 +369,9 @@ void bg_drawline_loopx8(WORD BGTOP, DWORD BGScrollX, DWORD BGScrollY, long adjus
        WORD si;
        BYTE *esi;
 
+       	quit_if_main_thread();
+
+
        ebp = ((BGScrollY + VLINEBG - BG_VLINE) & 7) << 3;
        edx = BGTOP + (((BGScrollY + VLINEBG - BG_VLINE) & 0x1f8) << 4);
        edi = ((BGScrollX - adjust) & 7) ^ 15;
@@ -594,6 +411,9 @@ void bg_drawline_loopx16(WORD BGTOP, DWORD BGScrollX, DWORD BGScrollY, long adju
        DWORD ebp, edx, edi, ecx;
        WORD si;
        BYTE *esi;
+
+
+	quit_if_main_thread();
 
        ebp = ((BGScrollY + VLINEBG - BG_VLINE) & 15) << 4;
        edx = BGTOP + (((BGScrollY + VLINEBG - BG_VLINE) & 0x3f0) << 3);
@@ -657,16 +477,27 @@ BG_DrawLine(int opaq, int gd)
 	int i;
 	void (*func8)(WORD, DWORD, DWORD), (*func16)(WORD, DWORD, DWORD);
 
+		quit_if_main_thread();
+
+
 	if (opaq) {
-		for (i = 16; i < TextDotX + 16; ++i) {
-			BG_LineBuf[i] = TextPal[0];
-			BG_PriBuf[i] = 0xffff;
+
+		//wmemset(&BG_LineBuf[16], (TextPal[0] << 16) | TextPal[0], TextDotX/2);
+		WORD * p = &BG_LineBuf[16];
+		const WORD c = TextPal[0]; 
+		#pragma GCC ivdep
+		for (i = 0; i < TextDotX; i++){
+			*p++ = c;
 		}
-	} else {
-		for (i = 16; i < TextDotX + 16; ++i) {
-			BG_PriBuf[i] = 0xffff;
-		}
-	}
+	} 
+	memset(&BG_PriBuf[16],  0xff, TextDotX*2);
+	/*WORD *p = &BG_PriBuf[16];
+	const WORD c = 0xffff; 
+
+	#pragma GCC ivdep
+	for (i = 0; i < TextDotX; i++){
+		*p++ = c;
+	}*/
 
 	func8 = (gd)? BG_DrawLineMcr8 : BG_DrawLineMcr8_ng;
 	func16 = (gd)? BG_DrawLineMcr16 : BG_DrawLineMcr16_ng;
@@ -685,4 +516,3 @@ BG_DrawLine(int opaq, int gd)
 	}
 	Sprite_DrawLineMcr(3);
 }
-#endif /* USE_ASM */

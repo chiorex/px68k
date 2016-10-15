@@ -16,6 +16,8 @@ extern	int	WindowX;
 extern	int	WindowY;
 extern	int	kbd_x, kbd_y, kbd_w, kbd_h;
 
+extern __THREAD DWORD CURRENT_VLINE;
+
 void WinDraw_InitWindowSize(WORD width, WORD height);
 void WinDraw_ChangeMode(int flag);
 int WinDraw_Init(void);
@@ -23,7 +25,7 @@ void WinDraw_Cleanup(void);
 void WinDraw_Redraw(void);
 void FASTCALL WinDraw_Draw(void);
 void WinDraw_ShowMenu(int flag);
-void WinDraw_DrawLine(void);
+void WinDraw_DrawLine(DWORD _VLINE);
 void WinDraw_HideSplash(void);
 void WinDraw_ChangeSize(void);
 

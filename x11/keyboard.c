@@ -43,7 +43,7 @@ struct keyboard_key kbd_key[] = {
 
 extern BYTE traceflag;
 
-#if defined(PSP) || defined(ANDROID) || TARGET_OS_IPHONE
+#if defined(PSP) || defined(ANDROID) || defined(TARGET_OS_IPHONE) || defined(USE_OGLES11)
 // キーボードの座標
 int kbd_x = 800, kbd_y = 0, kbd_w = 766, kbd_h = 218;
 #endif
