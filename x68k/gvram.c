@@ -13,13 +13,13 @@
 #include	"memory.h"
 
 #include <syscall.h>
-	WORD	Grp_LineBufSP_Tr[1024];
 
 BYTE	GVRAM[0x80000];
 
 __THREAD WORD	Grp_LineBuf[1024];
 __THREAD WORD	__attribute__ ((aligned (16))) Grp_LineBufSP[1024];		// ﾆﾃｼ・ﾗ･鬣､･ｪ･・ﾆ･｣｡ｿﾈｾﾆｩﾌﾀﾍﾑ･ﾐ･ﾃ･ﾕ･｡
 __THREAD WORD	Grp_LineBufSP2[1024];		// ﾈｾﾆｩﾌﾀ･ﾙ｡ｼ･ｹ･ﾗ･・ｼ･ﾑ･ﾐ･ﾃ･ﾕ･｡｡ﾊﾈｾﾆｩﾌﾀ･ﾓ･ﾃ･ﾈｳﾊﾇｼ｡ﾋ
+__THREAD WORD	Grp_LineBufSP_Tr[1024];
 
 WORD	Pal16Adr[256];			// 16bit color ･ﾑ･・ﾃ･ﾈ･｢･ﾉ･・ｹｷﾗｻｻﾍﾑ
 
@@ -609,8 +609,8 @@ void FASTCALL Grp_DrawLine8SP(int page)
 	for (i = 0; i < TextDotX; ++i, woff++, woff0++) {
 		v = (GVRAM[off | ((woff << 1) & 0x3fe )] & 0x0f) | (GVRAM[off0 | ((woff0 << 1) & 0x3fe) ] & 0xf0);
 		Grp_LineBufSP[i]  = (-( v&1)) &  (GrphPal[v & 0xfe] | Ibit);
-		Grp_LineBufSP2[i] = (-(~v&1)) &   GrphPal[v];
-		Grp_LineBufSP_Tr[i] = (-(~v&1)) &   ~GrphPal[v];
+		Grp_LineBufSP2[i] = (-(~v&1)) &   ((v & 0xfe) ?  GrphPal[v] : 0);
+		Grp_LineBufSP_Tr[i] = (-(~v&1)) & ((v & 0xfe) ? ~GrphPal[v] : 0);
 	}
 }
 
@@ -796,9 +796,9 @@ Grp_DrawLine8TR_GT(int page, int opaq)
 
 		page &= 1;
 
-		y = GrphScrollY[page * 2] + VLINE;
+		y = GrphScrollY[page * 2] + CURRENT_VLINE;
 		if ((CRTC_Regs[0x29] & 0x1c) == 0x1c)
-			y += VLINE;
+			y += CURRENT_VLINE;
 		y = ((y & 0x1ff) << 10) + page;
 		x = GrphScrollX[page * 2] & 0x1ff;
 
