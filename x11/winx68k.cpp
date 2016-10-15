@@ -360,6 +360,15 @@ void WinX68k_Exec(void)
 	} else if (Config.XVIMode == 2) {
 		clk_total = (clk_total*24)/10;
 		clkdiv = 24;
+	} else if (Config.XVIMode == 2) {
+		clk_total = (clk_total*50)/10;
+		clkdiv = 50;
+	} else if (Config.XVIMode == 2) {
+		clk_total = (clk_total*100)/10;
+		clkdiv = 100;
+	} else if (Config.XVIMode == 2) {
+		clk_total = (clk_total*200)/10;
+		clkdiv = 200;
 	} else {
 		clkdiv = 10;
 	}

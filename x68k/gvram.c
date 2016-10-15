@@ -13,14 +13,15 @@
 #include	"memory.h"
 
 #include <syscall.h>
+	WORD	Grp_LineBufSP_Tr[1024];
 
 BYTE	GVRAM[0x80000];
 
 __THREAD WORD	Grp_LineBuf[1024];
-__THREAD WORD	__attribute__ ((aligned (16))) Grp_LineBufSP[1024];		// ∆√ºÏ•◊•È•§•™•Í•∆•£°ø»æ∆©Ã¿Õ—•–•√•’•°
-__THREAD WORD	Grp_LineBufSP2[1024];		// »æ∆©Ã¿•Ÿ°º•π•◊•Ï°º•ÛÕ—•–•√•’•°° »Û»æ∆©Ã¿•”•√•»≥ «º°À
+__THREAD WORD	__attribute__ ((aligned (16))) Grp_LineBufSP[1024];		// ∆√ºÅE◊•È•§•™•ÅE∆•£°ø»æ∆©Ã¿Õ—•–•√•’•°
+__THREAD WORD	Grp_LineBufSP2[1024];		// »æ∆©Ã¿•Ÿ°º•π•◊•ÅEº•ÛÕ—•–•√•’•°° »Û»æ∆©Ã¿•”•√•»≥ «º°À
 
-WORD	Pal16Adr[256];			// 16bit color •—•Ï•√•»•¢•…•Ï•π∑◊ªªÕ—
+WORD	Pal16Adr[256];			// 16bit color •—•ÅE√•»•¢•…•ÅEπ∑◊ªªÕ—
 
 
 void debugThreadInfo(const char * where) {
@@ -39,14 +40,14 @@ void debugThreadInfo(const char * where) {
 
 
 // -----------------------------------------------------------------------
-//   ΩÈ¥¸≤Ω°¡
+//   ΩÈ¥ÅEΩ°¡
 // -----------------------------------------------------------------------
 void GVRAM_Init(void)
 {
 	int i;
 
 	ZeroMemory(GVRAM, 0x80000);
-	for (i=0; i<128; i++)			// 16bit color •—•Ï•√•»•¢•…•Ï•π∑◊ªªÕ—
+	for (i=0; i<128; i++)			// 16bit color •—•ÅE√•»•¢•…•ÅEπ∑◊ªªÕ—
 	{
 		Pal16Adr[i*2] = i*4;
 		Pal16Adr[i*2+1] = i*4+1;
@@ -55,7 +56,7 @@ void GVRAM_Init(void)
 
 
 // -----------------------------------------------------------------------------------
-//  π‚¬Æ•Ø•Í•¢Õ—•Î°º•¡•Û
+//  π‚¬Æ•Ø•ÅE¢Õ—•ÅEº•¡•ÅE
 // -----------------------------------------------------------------------------------
 
 void FASTCALL GVRAM_FastClear(void)
@@ -95,7 +96,7 @@ BYTE FASTCALL GVRAM_Read(DWORD adr)
 	adr ^= 1;
 	adr -= 0xc00000;
 
-	if (CRTC_Regs[0x28]&8) {			// ∆…§ﬂπ˛§ﬂ¬¶§‚65536•‚°º•…§ŒVRAM«€√÷° ∂Ï∞ﬂ∆¨ · ™ƒ¢°À
+	if (CRTC_Regs[0x28]&8) {			// ∆…§ﬂπ˛§ﬂ¬¶§ÅE5536•‚°º•…§ŒVRAM«€√÷° ∂ÅEﬂ∆¨ · ™ƒ¢°À
 		if (adr<0x80000) ret = GVRAM[adr];
 	} else {
 		switch(CRTC_Regs[0x28]&3)
@@ -235,7 +236,7 @@ void FASTCALL GVRAM_Write(DWORD adr, BYTE data)
 
 
 // -----------------------------------------------------------------------
-//   §≥§√§´§È∏Â§œ•È•§•Û√±∞Ã§«§Œ≤ËÃÃ≈∏≥´…Ù
+//   §≥§√§´§È∏Â§œ•È•§•Û√±∞Ã§«§Œ≤ËÃÃ≈∏≥´…ÅE
 // -----------------------------------------------------------------------
 LABEL void Grp_DrawLine16(void)
 {
@@ -531,7 +532,7 @@ void FASTCALL Grp_DrawLine4h(void)
 
 
 // -------------------------------------------------
-// --- »æ∆©Ã¿°ø∆√ºÏPri§Œ•Ÿ°º•π§»§ §Î•⁄°º•∏§Œ…¡≤Ë ---
+// --- »æ∆©Ã¿°ø∆√ºÅEri§Œ•Ÿ°º•π§»§ §ÅE⁄°º•∏§Œ…¡≤ÅE---
 // -------------------------------------------------
 void FASTCALL Grp_DrawLine16SP(void)
 {
@@ -609,6 +610,7 @@ void FASTCALL Grp_DrawLine8SP(int page)
 		v = (GVRAM[off | ((woff << 1) & 0x3fe )] & 0x0f) | (GVRAM[off0 | ((woff0 << 1) & 0x3fe) ] & 0xf0);
 		Grp_LineBufSP[i]  = (-( v&1)) &  (GrphPal[v & 0xfe] | Ibit);
 		Grp_LineBufSP2[i] = (-(~v&1)) &   GrphPal[v];
+		Grp_LineBufSP_Tr[i] = (-(~v&1)) &   ~GrphPal[v];
 	}
 }
 
@@ -617,7 +619,7 @@ void FASTCALL Grp_DrawLine4SP(DWORD page/*, int opaq*/)
 {
 	DWORD scrx, scry;
 	page &= 3;
-	switch(page)		// »˛§∑§Ø§ §µ§π§Æ§Î° æ–°À
+	switch(page)		// »˛§∑§Ø§ §µ§π§Æ§ÅE æ–°À
 	{
 	case 0:	scrx = GrphScrollX[0]; scry = GrphScrollY[0]; break;
 	case 1: scrx = GrphScrollX[1]; scry = GrphScrollY[1]; break;
@@ -735,16 +737,16 @@ void FASTCALL Grp_DrawLine4hSP(void)
 
 
 // -------------------------------------------------
-// --- »æ∆©Ã¿§Œ¬–æ›§»§ §Î•⁄°º•∏§Œ…¡≤Ë --------------
-// 2•⁄°º•∏∞ æÂ§¢§Î•∞•È•’•£•√•Ø•‚°º•…§Œ§ﬂ§ §Œ§«°¢
+// --- »æ∆©Ã¿§Œ¬–æ›§»§ §ÅE⁄°º•∏§Œ…¡≤ÅE--------------
+// 2•⁄°º•∏∞ æÂ§¢§ÅE∞•È•’•£•√•Ø•‚°º•…§Œ§ﬂ§ §Œ§«°¢
 // 256øß2ÃÃ or 16øß4ÃÃ§Œ•‚°º•…§Œ§ﬂ°£
 // 256øßª˛§œ°¢Opaque§«§ §§ ˝§Œ•‚°º•…§œ§§§È§ §§§´§‚°ƒ
 // ° …¨§∫Opaque•‚°º•…§Œ»¶°À
 // -------------------------------------------------
-// §≥§≥§œ§ﬁ§¿32øßx4ÃÃ•‚°º•…§Œº¬¡ı§Ú§∑§∆§ §§§Ï§π°ƒ
-// ° §Ï§∏§π§ø¬≠§Í§ §§§Ë§•°ƒ°À
+// §≥§≥§œ§ﬁ§¿32øßx4ÃÃ•‚°º•…§Œº¬¡ı§Ú§∑§∆§ §§§ÅEπ°ƒ
+// ° §ÅE∏§π§ø¬≠§Í§ §§§Ë§•°ƒ°À
 // -------------------------------------------------
-							// §‰§±§À§π§√§≠§Í
+							// §‰§±§À§π§√§≠§ÅE
 LABEL void FASTCALL
 Grp_DrawLine8TR(int page, int opaq)
 {
@@ -780,6 +782,29 @@ Grp_DrawLine8TR(int page, int opaq)
 			} else
 				v = GrphPal[v];
 			Grp_LineBuf[i] = (WORD)v;
+		}
+	}
+}
+
+LABEL void FASTCALL
+Grp_DrawLine8TR_GT(int page, int opaq)
+{
+	if (opaq) {
+		DWORD x, y;
+		DWORD v, v0;
+		DWORD i;
+
+		page &= 1;
+
+		y = GrphScrollY[page * 2] + VLINE;
+		if ((CRTC_Regs[0x29] & 0x1c) == 0x1c)
+			y += VLINE;
+		y = ((y & 0x1ff) << 10) + page;
+		x = GrphScrollX[page * 2] & 0x1ff;
+
+		for (i = 0; i < TextDotX; ++i, x = (x + 1) & 0x1ff) {
+			Grp_LineBuf[i] = (Grp_LineBufSP[i] || Grp_LineBufSP_Tr[i]) ? 0 : GrphPal[GVRAM[y + x * 2]];
+			Grp_LineBufSP_Tr[i] = 0;
 		}
 	}
 }
@@ -902,7 +927,7 @@ Grp_DrawLine4TR(DWORD page, int opaq)
 }
 
 /*
-MS-C §Œ§Ú gas §Œ•§•Û•È•§•Û•¢•ª•Û•÷•Í§À§∆§±§»°º§À —¥π
+MS-C §Œ§ÅEgas §Œ•§•Û•È•§•Û•¢•ª•Û•÷•Í§À§∆§±§»°º§À —¥π
 
 s/\<.*:/.&/
 s/[^ \t]/"&/

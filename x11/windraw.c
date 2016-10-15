@@ -1344,6 +1344,8 @@ void WinDraw_DrawLineX(void)
 			{
 				if ( ((VCReg2[0]&0x1e)==0x1e)&&(tron) )
 					Grp_DrawLine8TR(1, 1);
+				else if ( ((VCReg2[0]&0x1d)==0x1d)&&(tron) )
+					Grp_DrawLine8TR_GT(1, 1);
 				else
 					Grp_DrawLine8(1, 1);
 				opaq = 0;
@@ -1369,6 +1371,8 @@ void WinDraw_DrawLineX(void)
 			{
 				if ( ((VCReg2[0]&0x1e)==0x1e)&&(tron) )
 					Grp_DrawLine8TR(0, 1);
+				else if ( ((VCReg2[0]&0x1d)==0x1d)&&(tron) )
+					Grp_DrawLine8TR_GT(0, 1);
 				else
 					Grp_DrawLine8(0, 1);
 				opaq = 0;
