@@ -609,8 +609,8 @@ void FASTCALL Grp_DrawLine8SP(int page)
 	for (i = 0; i < TextDotX; ++i, woff++, woff0++) {
 		v = (GVRAM[off | ((woff << 1) & 0x3fe )] & 0x0f) | (GVRAM[off0 | ((woff0 << 1) & 0x3fe) ] & 0xf0);
 		Grp_LineBufSP[i]  = (-( v&1)) &  (GrphPal[v & 0xfe] | Ibit);
-		Grp_LineBufSP2[i] = (-(~v&1)) &   ((v & 0xfe) ?  GrphPal[v] : 0);
-		Grp_LineBufSP_Tr[i] = (-(~v&1)) & ((v & 0xfe) ? ~GrphPal[v] : 0);
+		Grp_LineBufSP2[i] = (-(~v&1)) &   (v ?  GrphPal[v] : 0);
+		Grp_LineBufSP_Tr[i] = (-(~v&1)) & (v ? !GrphPal[v] : 0);
 	}
 }
 
