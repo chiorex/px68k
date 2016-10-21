@@ -51,7 +51,9 @@
 
 #include <pthread.h>
 #include <semaphore.h>
+#ifndef ANDROID
 #include <syscall.h>
+#endif
 
 
 

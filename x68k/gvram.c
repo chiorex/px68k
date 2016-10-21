@@ -12,7 +12,9 @@
 #include	"m68000.h"
 #include	"memory.h"
 
+#ifndef ANDROID
 #include <syscall.h>
+#endif
 
 BYTE	GVRAM[0x80000];
 
